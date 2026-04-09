@@ -143,6 +143,7 @@ def build_livery():
                 "split":        float(data.get("split", 0.5)),
                 "direction":    data.get("direction", "horizontal"),
                 "depth":        float(data.get("depth", 0.35)),
+                "feather":      int(data.get("feather", 60)),
             },
             texture          = data.get("texture", "none"),
             texture_opacity  = float(data.get("texture_opacity", 0.25)),

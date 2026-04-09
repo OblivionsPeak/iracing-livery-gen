@@ -100,7 +100,7 @@
   details summary { list-style: none; }
   details summary::-webkit-details-marker { display: none; }
 
-  #params-angle, #params-split { display: none; margin-top: 6px; }
+  #params-angle, #params-split, #params-feather { display: none; margin-top: 6px; }
 
   .result-card { background: #111; border-radius: 6px; overflow: hidden; margin-bottom: 14px; }
   .result-card img { width: 100%; display: block; }
@@ -234,6 +234,14 @@
       <option value="horizontal">Horizontal</option>
       <option value="vertical">Vertical</option>
     </select>
+  </div>
+
+  <div id="params-feather">
+    <label>Edge fade: <span id="feather-val">60px</span></label>
+    <div class="slider-row">
+      <input type="range" id="feather" min="0" max="200" value="60"
+        oninput="document.getElementById('feather-val').textContent=this.value+'px'; scheduleLive()">
+    </div>
   </div>
 
   <!-- OVERLAY PATTERN -->
@@ -406,6 +414,8 @@ document.querySelectorAll('.design-btn').forEach(btn => {
       selectedDesign === 'racing_stripes' ? 'block' : 'none';
     document.getElementById('params-split').style.display =
       ['split','gradient'].includes(selectedDesign) ? 'block' : 'none';
+    document.getElementById('params-feather').style.display =
+      selectedDesign === 'gradient_chevron' ? 'block' : 'none';
     scheduleLive();
   });
 });
@@ -464,6 +474,7 @@ function buildPayload(carId = null) {
     template_opacity: document.getElementById('template-opacity').value / 100,
     overlay_design:   document.getElementById('overlay-design').value,
     overlay_opacity:  document.getElementById('overlay-opacity').value / 100,
+    feather:          parseInt(document.getElementById('feather').value),
   };
 }
 

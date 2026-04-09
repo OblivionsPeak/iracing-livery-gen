@@ -178,21 +178,26 @@ def _make_design(primary, secondary, accent, design, params) -> Image.Image:
 
     elif design == "gradient_chevron":
         # Gradient fills the chevron shape; solid primary outside
-        depth = params.get("depth", 0.35)
+        depth   = params.get("depth", 0.35)
+        feather = int(params.get("feather", 60))   # 0 = hard edge, 60+ = soft fade
         px_   = int(SIZE * 0.55)
         half  = SIZE // 2
         dy    = int(SIZE * depth)
         # Build a gradient layer
         grad = Image.new("RGB", (SIZE, SIZE), primary)
         _draw_gradient(grad, primary, secondary, "horizontal")
-        # Chevron mask: only the arrow shape shows the gradient
+        # Chevron mask — blur it to feather the edge into the primary color
         mask = Image.new("L", (SIZE, SIZE), 0)
         ImageDraw.Draw(mask).polygon(
             [(0, 0), (px_ - dy, 0), (px_, half), (px_ - dy, SIZE), (0, SIZE)],
             fill=255,
         )
+        if feather > 0:
+            mask = mask.filter(ImageFilter.GaussianBlur(radius=feather))
         img.paste(grad, mask=mask)
-        draw.line([(px_ - dy, 0), (px_, half), (px_ - dy, SIZE)], fill=accent, width=18)
+        # Only draw hard accent line when edge is crisp (feather=0)
+        if feather == 0:
+            draw.line([(px_ - dy, 0), (px_, half), (px_ - dy, SIZE)], fill=accent, width=18)
 
     return img
 
