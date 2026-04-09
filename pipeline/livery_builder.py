@@ -88,29 +88,48 @@ def _make_design(primary, secondary, accent, design, params) -> Image.Image:
 
     elif design == "racing_stripes":
         # Classic Le Mans style — one wide centre stripe + two thin accents
-        # Angle tilts the stripes as parallelograms
+        # Angle tilts the stripes; direction controls vertical vs horizontal orientation
         w = params.get("stripe_width", 160)
         gap = params.get("gap", 25)
         angle = params.get("angle", 45)
-        cx = SIZE // 2
+        direction = params.get("direction", "vertical")
         shift = int(SIZE * math.tan(math.radians(angle % 180)))
-        # Centre stripe
-        draw.polygon([
-            (cx - w // 2, 0), (cx + w // 2, 0),
-            (cx + w // 2 + shift, SIZE), (cx - w // 2 + shift, SIZE),
-        ], fill=secondary)
-        # Left accent
-        lx = cx - w // 2 - gap - 40
-        draw.polygon([
-            (lx, 0), (lx + 40, 0),
-            (lx + 40 + shift, SIZE), (lx + shift, SIZE),
-        ], fill=accent)
-        # Right accent
-        rx = cx + w // 2 + gap
-        draw.polygon([
-            (rx, 0), (rx + 40, 0),
-            (rx + 40 + shift, SIZE), (rx + shift, SIZE),
-        ], fill=accent)
+        hs = shift // 2  # half-shift keeps the stripe visually centred
+
+        if direction == "horizontal":
+            # Stripes run left-to-right across the canvas
+            cy = SIZE // 2
+            draw.polygon([
+                (0, cy - w // 2 - hs), (SIZE, cy - w // 2 + hs),
+                (SIZE, cy + w // 2 + hs), (0, cy + w // 2 - hs),
+            ], fill=secondary)
+            ay = cy - w // 2 - gap - 40
+            draw.polygon([
+                (0, ay - hs), (SIZE, ay + hs),
+                (SIZE, ay + 40 + hs), (0, ay + 40 - hs),
+            ], fill=accent)
+            by_ = cy + w // 2 + gap
+            draw.polygon([
+                (0, by_ - hs), (SIZE, by_ + hs),
+                (SIZE, by_ + 40 + hs), (0, by_ + 40 - hs),
+            ], fill=accent)
+        else:
+            # Stripes run top-to-bottom (vertical, default)
+            cx = SIZE // 2
+            draw.polygon([
+                (cx - w // 2 - hs, 0), (cx + w // 2 - hs, 0),
+                (cx + w // 2 + hs, SIZE), (cx - w // 2 + hs, SIZE),
+            ], fill=secondary)
+            lx = cx - w // 2 - gap - 40
+            draw.polygon([
+                (lx - hs, 0), (lx + 40 - hs, 0),
+                (lx + 40 + hs, SIZE), (lx + hs, SIZE),
+            ], fill=accent)
+            rx = cx + w // 2 + gap
+            draw.polygon([
+                (rx - hs, 0), (rx + 40 - hs, 0),
+                (rx + 40 + hs, SIZE), (rx + hs, SIZE),
+            ], fill=accent)
 
     elif design == "diagonal_stripes":
         angle = params.get("angle", 45)

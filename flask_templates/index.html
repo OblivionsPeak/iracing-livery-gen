@@ -213,6 +213,14 @@
     </div>
   </div>
 
+  <div id="params-stripe-dir" style="display:none; margin-top:6px;">
+    <label>Direction</label>
+    <select id="stripe-dir" onchange="scheduleLive()">
+      <option value="vertical">Vertical</option>
+      <option value="horizontal">Horizontal</option>
+    </select>
+  </div>
+
   <div id="params-split">
     <label>Split position</label>
     <div class="slider-row">
@@ -367,6 +375,8 @@ document.querySelectorAll('.design-btn').forEach(btn => {
     selectedDesign = btn.dataset.design;
     document.getElementById('params-angle').style.display =
       ['diagonal_stripes','racing_stripes','two_tone'].includes(selectedDesign) ? 'block' : 'none';
+    document.getElementById('params-stripe-dir').style.display =
+      selectedDesign === 'racing_stripes' ? 'block' : 'none';
     document.getElementById('params-split').style.display =
       ['split','gradient'].includes(selectedDesign) ? 'block' : 'none';
     scheduleLive();
@@ -419,7 +429,9 @@ function buildPayload(carId = null) {
     angle:            document.getElementById('angle').value,
     stripe_width:     document.getElementById('stripe-width').value,
     split:            document.getElementById('split-pos').value / 100,
-    direction:        document.getElementById('split-dir').value,
+    direction:        selectedDesign === 'racing_stripes'
+                        ? document.getElementById('stripe-dir').value
+                        : document.getElementById('split-dir').value,
     texture:          document.getElementById('texture').value,
     texture_opacity:  document.getElementById('texture-opacity').value / 100,
     template_opacity: document.getElementById('template-opacity').value / 100,
