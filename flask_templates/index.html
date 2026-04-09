@@ -340,7 +340,7 @@ let liveTimer = null;
 function scheduleLive() {
   clearTimeout(liveTimer);
   liveTimer = setTimeout(() => {
-    if (carSelect.selectedOptions[0].dataset.ready === 'true') triggerBuild(false);
+    if (activeCar) triggerBuild(false);
   }, 500);
 }
 
@@ -402,7 +402,7 @@ document.getElementById('btn-vary').addEventListener('click', async () => {
     try {
       const r = await fetch('/build', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(p) });
       const d = await r.json();
-      if (!d.error) renderResult(d.image, carId);
+      if (!d.error) renderResult(d.image, getCarId());
     } catch {}
   }
   setStatus('Done — 4 variations generated.');
@@ -437,7 +437,7 @@ async function triggerBuild(prepend) {
     const d = await r.json();
     if (d.error) throw new Error(d.error);
     setStatus('');
-    renderResult(d.image, carId);
+    renderResult(d.image, getCarId());
   } catch(e) {
     setStatus('Error: ' + e.message, true);
   } finally {
