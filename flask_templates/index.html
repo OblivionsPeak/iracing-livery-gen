@@ -235,6 +235,31 @@
     </select>
   </div>
 
+  <!-- OVERLAY PATTERN -->
+  <div class="section-title">Overlay Pattern</div>
+  <div class="row" style="align-items:flex-end;">
+    <div>
+      <label>Pattern</label>
+      <select id="overlay-design" onchange="scheduleLive()">
+        <option value="none">None</option>
+        <option value="solid">Solid</option>
+        <option value="racing_stripes">Racing Stripes</option>
+        <option value="diagonal_stripes">Diagonal</option>
+        <option value="gradient">Gradient</option>
+        <option value="sweep">GT Sweep</option>
+        <option value="split">Split</option>
+        <option value="chevron">Chevron</option>
+        <option value="two_tone">Two-Tone</option>
+      </select>
+    </div>
+    <div>
+      <label>Opacity: <span id="ov-val">40%</span></label>
+      <input type="range" id="overlay-opacity" min="0" max="90" value="40"
+        style="width:100%;margin-top:6px;accent-color:#f0c040"
+        oninput="document.getElementById('ov-val').textContent=this.value+'%'; scheduleLive()">
+    </div>
+  </div>
+
   <!-- FINISH -->
   <div class="section-title">Finish</div>
   <div class="row">
@@ -435,6 +460,8 @@ function buildPayload(carId = null) {
     texture:          document.getElementById('texture').value,
     texture_opacity:  document.getElementById('texture-opacity').value / 100,
     template_opacity: document.getElementById('template-opacity').value / 100,
+    overlay_design:   document.getElementById('overlay-design').value,
+    overlay_opacity:  document.getElementById('overlay-opacity').value / 100,
   };
 }
 

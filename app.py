@@ -147,6 +147,8 @@ def build_livery():
             texture          = data.get("texture", "none"),
             texture_opacity  = float(data.get("texture_opacity", 0.25)),
             template_opacity = float(data.get("template_opacity", 0.35)),
+            overlay_design   = data.get("overlay_design", "none"),
+            overlay_opacity  = float(data.get("overlay_opacity", 0.4)),
         )
     except Exception as e:
         return jsonify({"error": str(e)}), 500
