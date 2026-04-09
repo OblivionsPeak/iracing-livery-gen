@@ -1,0 +1,11 @@
+venv/
+__pycache__/
+*.pyc
+*.pyo
+.env
+car_templates/*/template.png
+car_templates/*/template.psd
+car_templates/*/template.tga
+static/previews/*.png
+output/
+.DS_Store

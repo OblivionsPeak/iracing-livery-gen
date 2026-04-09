@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>iRacing Livery Generator</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0f0f0f; color: #ddd; font-family: 'Segoe UI', sans-serif; padding: 20px; }
+  h1 { font-size: 1.4rem; color: #f0c040; letter-spacing: 1px; margin-bottom: 4px; }
+  .subtitle { font-size: 0.78rem; color: #444; margin-bottom: 20px; }
+
+  .layout { display: grid; grid-template-columns: 360px 1fr; gap: 20px; max-width: 1400px; }
+  @media (max-width: 780px) { .layout { grid-template-columns: 1fr; } }
+
+  .panel { background: #181818; border: 1px solid #2a2a2a; border-radius: 8px; padding: 18px; }
+
+  .section-title {
+    font-size: 0.72rem; text-transform: uppercase; letter-spacing: 1.5px;
+    color: #555; margin: 18px 0 10px; border-top: 1px solid #222; padding-top: 14px;
+  }
+  .section-title:first-child { margin-top: 0; border-top: none; padding-top: 0; }
+
+  label { display: block; font-size: 0.82rem; color: #999; margin-bottom: 4px; margin-top: 10px; }
+  select, input[type=text], input[type=number] {
+    width: 100%; padding: 7px 9px; background: #222; border: 1px solid #333;
+    border-radius: 4px; color: #ddd; font-size: 0.88rem;
+  }
+
+  .color-row { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+  .color-row label { margin: 0; min-width: 72px; font-size: 0.82rem; color: #999; }
+  input[type=color] {
+    width: 38px; height: 32px; padding: 2px; border: 1px solid #444;
+    border-radius: 4px; background: #222; cursor: pointer; flex-shrink: 0;
+  }
+  .color-hex { flex: 1; }
+
+  .preset-bar { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+  .preset-btn {
+    padding: 4px 9px; background: #1e1e1e; border: 1px solid #333;
+    border-radius: 3px; color: #777; font-size: 0.72rem; cursor: pointer;
+    transition: all 0.1s;
+  }
+  .preset-btn:hover { border-color: #666; color: #bbb; }
+
+  .design-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 8px; }
+  .design-btn {
+    padding: 8px 4px; background: #222; border: 1px solid #333; border-radius: 4px;
+    color: #888; font-size: 0.74rem; cursor: pointer; text-align: center; transition: all 0.12s;
+  }
+  .design-btn:hover { border-color: #f0c040; color: #f0c040; }
+  .design-btn.active { background: #2a2200; border-color: #f0c040; color: #f0c040; }
+
+  .slider-row { display: flex; align-items: center; gap: 10px; margin-top: 5px; }
+  .slider-row input[type=range] { flex: 1; accent-color: #f0c040; }
+  .slider-val { font-size: 0.8rem; color: #777; min-width: 38px; text-align: right; }
+
+  .row { display: flex; gap: 10px; }
+  .row > * { flex: 1; }
+
+  .btn-build {
+    width: 100%; padding: 11px; margin-top: 16px; background: #f0c040; color: #111;
+    font-weight: 700; font-size: 0.95rem; border: none; border-radius: 5px;
+    cursor: pointer; transition: opacity 0.15s;
+  }
+  .btn-build:hover { opacity: 0.88; }
+  .btn-build:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .btn-vary {
+    width: 100%; padding: 8px; margin-top: 8px; background: #252525; color: #888;
+    font-size: 0.82rem; border: 1px solid #333; border-radius: 5px; cursor: pointer;
+  }
+  .btn-vary:hover { color: #bbb; border-color: #555; }
+
+  .btn-fetch {
+    width: 100%; padding: 7px; margin-top: 8px; background: #1e3a5a;
+    color: #9ab; font-size: 0.8rem; border: none; border-radius: 4px; cursor: pointer;
+  }
+  .btn-fetch:hover { background: #254a72; }
+
+  #status { margin-top: 10px; font-size: 0.82rem; color: #777; min-height: 18px; }
+  #status.error { color: #e55; }
+
+  #template-status { font-size: 0.75rem; margin-top: 5px; }
+  .ok { color: #4c4; } .missing { color: #e44; }
+  #upload-section { display: none; margin-top: 10px; }
+  #upload-section input[type=file] { font-size: 0.8rem; color: #888; background: #1a1a1a; border: 1px solid #333; border-radius: 4px; padding: 6px; width: 100%; }
+
+  #params-angle, #params-split { display: none; margin-top: 6px; }
+
+  .result-card { background: #111; border-radius: 6px; overflow: hidden; margin-bottom: 14px; }
+  .result-card img { width: 100%; display: block; }
+  .result-footer { padding: 8px 12px; display: flex; justify-content: space-between; align-items: center; }
+  .result-label { font-size: 0.72rem; color: #444; }
+  .btn-dl {
+    background: #1e4a2e; color: #8c8; border: none; padding: 7px 16px;
+    border-radius: 4px; cursor: pointer; font-size: 0.82rem; text-decoration: none;
+    display: inline-block;
+  }
+  .btn-dl:hover { background: #2a6a3e; }
+
+  .spinner {
+    display: inline-block; width: 12px; height: 12px; border: 2px solid #444;
+    border-top-color: #f0c040; border-radius: 50%;
+    animation: spin 0.7s linear infinite; vertical-align: middle; margin-right: 5px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<h1>iRacing Livery Generator</h1>
+<p class="subtitle">Programmatic livery builder — no GPU required. Upload your car template, pick colors, download.</p>
+
+<div class="layout">
+
+<!-- ── LEFT PANEL ── -->
+<div class="panel">
+
+  <div class="section-title">Car</div>
+  <select id="car-select">
+    {% for car in cars %}
+    <option value="{{ car.id }}" data-ready="{{ car.template_ready | lower }}">
+      {{ car.name }} — {{ car.series }}
+    </option>
+    {% endfor %}
+  </select>
+  <div id="template-status"></div>
+
+  <div id="upload-section">
+    <label>Upload template (.png / .psd / .tga)</label>
+    <input type="file" id="template-file" accept=".png,.psd,.tga,.zip">
+    <label style="margin-top:8px;">Or paste direct download URL</label>
+    <input type="text" id="template-url" placeholder="https://...">
+    <div style="font-size:0.7rem;color:#444;margin-top:4px;">
+      Get templates: members.iracing.com → Garage → select car → Paint Templates
+    </div>
+  </div>
+  <button class="btn-fetch" id="btn-fetch">Download / Load Template</button>
+
+  <!-- COLORS -->
+  <div class="section-title">Colors</div>
+  <div class="preset-bar">
+    <span style="font-size:0.7rem;color:#444;align-self:center;">PRESETS:</span>
+    <button class="preset-btn" data-p="#0a0a0a" data-s="#c8102e" data-a="#ffffff">GT Black/Red</button>
+    <button class="preset-btn" data-p="#ffffff" data-s="#003087" data-a="#c8102e">Gulf</button>
+    <button class="preset-btn" data-p="#003087" data-s="#ffd700" data-a="#ffffff">Rothmans</button>
+    <button class="preset-btn" data-p="#1b1b1b" data-s="#ffd700" data-a="#888888">Carbon Gold</button>
+    <button class="preset-btn" data-p="#006341" data-s="#ffffff" data-a="#ffd700">Racing Green</button>
+    <button class="preset-btn" data-p="#e8e8e8" data-s="#cc0000" data-a="#111111">Martini</button>
+    <button class="preset-btn" data-p="#0d1b2a" data-s="#00b4d8" data-a="#90e0ef">Night Sky</button>
+    <button class="preset-btn" data-p="#2d2d2d" data-s="#ff6b00" data-a="#ffffff">Stealth</button>
+  </div>
+  <div class="color-row">
+    <label>Primary</label>
+    <input type="color" id="col-primary" value="#1a1a2e">
+    <input type="text" class="color-hex" id="hex-primary" value="#1a1a2e" maxlength="7">
+  </div>
+  <div class="color-row">
+    <label>Secondary</label>
+    <input type="color" id="col-secondary" value="#e63946">
+    <input type="text" class="color-hex" id="hex-secondary" value="#e63946" maxlength="7">
+  </div>
+  <div class="color-row">
+    <label>Accent</label>
+    <input type="color" id="col-accent" value="#ffd700">
+    <input type="text" class="color-hex" id="hex-accent" value="#ffd700" maxlength="7">
+  </div>
+
+  <!-- DESIGN PATTERN -->
+  <div class="section-title">Design Pattern</div>
+  <div class="design-grid">
+    <div class="design-btn active" data-design="solid">Solid</div>
+    <div class="design-btn" data-design="racing_stripes">Racing Stripes</div>
+    <div class="design-btn" data-design="diagonal_stripes">Diagonal</div>
+    <div class="design-btn" data-design="gradient">Gradient</div>
+    <div class="design-btn" data-design="sweep">GT Sweep</div>
+    <div class="design-btn" data-design="split">Split</div>
+    <div class="design-btn" data-design="chevron">Chevron</div>
+    <div class="design-btn" data-design="two_tone">Two-Tone</div>
+  </div>
+
+  <div id="params-angle">
+    <label>Angle</label>
+    <div class="slider-row">
+      <input type="range" id="angle" min="10" max="80" value="45"
+        oninput="document.getElementById('angle-val').textContent=this.value+'°'; scheduleLive()">
+      <span class="slider-val" id="angle-val">45°</span>
+    </div>
+    <label>Stripe width</label>
+    <div class="slider-row">
+      <input type="range" id="stripe-width" min="40" max="400" value="160"
+        oninput="document.getElementById('sw-val').textContent=this.value; scheduleLive()">
+      <span class="slider-val" id="sw-val">160</span>
+    </div>
+  </div>
+
+  <div id="params-split">
+    <label>Split position</label>
+    <div class="slider-row">
+      <input type="range" id="split-pos" min="20" max="80" value="50"
+        oninput="document.getElementById('sp-val').textContent=this.value+'%'; scheduleLive()">
+      <span class="slider-val" id="sp-val">50%</span>
+    </div>
+    <label>Direction</label>
+    <select id="split-dir" onchange="scheduleLive()">
+      <option value="horizontal">Horizontal</option>
+      <option value="vertical">Vertical</option>
+    </select>
+  </div>
+
+  <!-- FINISH -->
+  <div class="section-title">Finish</div>
+  <div class="row">
+    <div>
+      <label>Texture</label>
+      <select id="texture" onchange="scheduleLive()">
+        <option value="none">None (flat)</option>
+        <option value="matte">Matte</option>
+        <option value="carbon_fiber">Carbon Fiber</option>
+        <option value="brushed_metal">Brushed Metal</option>
+      </select>
+    </div>
+    <div>
+      <label>Opacity: <span id="to-val">25%</span></label>
+      <input type="range" id="texture-opacity" min="0" max="70" value="25" style="width:100%;margin-top:6px;accent-color:#f0c040"
+        oninput="document.getElementById('to-val').textContent=this.value+'%'; scheduleLive()">
+    </div>
+  </div>
+  <label>Template lines: <span id="tpl-val">35%</span></label>
+  <input type="range" id="template-opacity" min="0" max="80" value="35" style="width:100%;margin-top:4px;accent-color:#f0c040"
+    oninput="document.getElementById('tpl-val').textContent=this.value+'%'; scheduleLive()">
+
+  <!-- GENERATE -->
+  <button class="btn-build" id="btn-build">Generate Livery</button>
+  <button class="btn-vary" id="btn-vary">⟳  Generate 4 Variations</button>
+  <div id="status"></div>
+
+</div>
+
+<!-- ── RIGHT PANEL ── -->
+<div class="panel">
+  <div class="section-title" style="margin-top:0;border-top:none;padding-top:0;">Output</div>
+  <div id="results">
+    <p style="color:#444;font-size:0.85rem;">Upload a template and click Generate to get started.</p>
+  </div>
+</div>
+
+</div><!-- end layout -->
+
+<script>
+const carSelect = document.getElementById('car-select');
+const statusEl  = document.getElementById('status');
+
+// ── Template status ──
+function updateTemplateStatus() {
+  const opt   = carSelect.selectedOptions[0];
+  const ready = opt.dataset.ready === 'true';
+  const el    = document.getElementById('template-status');
+  el.textContent = ready ? '✓ Template ready' : '✗ Template not uploaded';
+  el.className   = 'template-status ' + (ready ? 'ok' : 'missing');
+  document.getElementById('upload-section').style.display = ready ? 'none' : 'block';
+  document.getElementById('btn-build').disabled = !ready;
+  document.getElementById('btn-vary').disabled  = !ready;
+}
+carSelect.addEventListener('change', updateTemplateStatus);
+updateTemplateStatus();
+
+// ── Color pickers with live preview ──
+let liveTimer = null;
+['primary','secondary','accent'].forEach(name => {
+  const picker = document.getElementById('col-' + name);
+  const hex    = document.getElementById('hex-' + name);
+  picker.addEventListener('input', () => { hex.value = picker.value; scheduleLive(); });
+  hex.addEventListener('input', () => {
+    if (/^#[0-9a-fA-F]{6}$/.test(hex.value)) { picker.value = hex.value; scheduleLive(); }
+  });
+});
+
+function scheduleLive() {
+  clearTimeout(liveTimer);
+  liveTimer = setTimeout(() => {
+    if (carSelect.selectedOptions[0].dataset.ready === 'true') triggerBuild(false);
+  }, 500);
+}
+
+// ── Presets ──
+document.querySelectorAll('.preset-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    setColor('primary',   btn.dataset.p);
+    setColor('secondary', btn.dataset.s);
+    setColor('accent',    btn.dataset.a);
+    scheduleLive();
+  });
+});
+function setColor(name, h) {
+  document.getElementById('col-' + name).value = h;
+  document.getElementById('hex-' + name).value = h;
+}
+
+// ── Design buttons ──
+let selectedDesign = 'solid';
+document.querySelectorAll('.design-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.design-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    selectedDesign = btn.dataset.design;
+    document.getElementById('params-angle').style.display =
+      ['diagonal_stripes','racing_stripes','two_tone'].includes(selectedDesign) ? 'block' : 'none';
+    document.getElementById('params-split').style.display =
+      ['split','gradient'].includes(selectedDesign) ? 'block' : 'none';
+    scheduleLive();
+  });
+});
+
+// ── Template fetch / upload ──
+document.getElementById('btn-fetch').addEventListener('click', async () => {
+  const carId = carSelect.value;
+  const file  = document.getElementById('template-file');
+  const url   = document.getElementById('template-url').value.trim();
+  document.getElementById('btn-fetch').disabled = true;
+  setStatus('<span class="spinner"></span>Processing template...');
+  try {
+    let r;
+    if (file.files.length > 0) {
+      const form = new FormData();
+      form.append('car_id', carId);
+      form.append('file', file.files[0]);
+      r = await fetch('/upload-template', { method: 'POST', body: form });
+    } else {
+      r = await fetch('/fetch-template', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ car_id: carId, url: url || null })
+      });
+    }
+    const data = await r.json();
+    if (data.error) throw new Error(data.error);
+    carSelect.selectedOptions[0].dataset.ready = 'true';
+    updateTemplateStatus();
+    setStatus('Template ready.');
+  } catch(e) {
+    setStatus('Error: ' + e.message, true);
+  } finally {
+    document.getElementById('btn-fetch').disabled = false;
+  }
+});
+
+// ── Build ──
+document.getElementById('btn-build').addEventListener('click', () => triggerBuild(true));
+
+document.getElementById('btn-vary').addEventListener('click', async () => {
+  const carId   = carSelect.value;
+  const designs = ['solid','racing_stripes','diagonal_stripes','sweep','gradient','chevron','split','two_tone'];
+  const angles  = [30, 45, 60];
+  document.getElementById('btn-vary').disabled = true;
+  setStatus('<span class="spinner"></span>Generating 4 variations...');
+  for (let i = 0; i < 4; i++) {
+    const p = buildPayload(carId);
+    p.design       = designs[Math.floor(Math.random() * designs.length)];
+    p.angle        = angles[Math.floor(Math.random() * angles.length)];
+    p.stripe_width = 80 + Math.floor(Math.random() * 200);
+    try {
+      const r = await fetch('/build', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(p) });
+      const d = await r.json();
+      if (!d.error) renderResult(d.image, carId);
+    } catch {}
+  }
+  setStatus('Done — 4 variations generated.');
+  document.getElementById('btn-vary').disabled = false;
+});
+
+function buildPayload(carId) {
+  return {
+    car_id:           carId,
+    primary:          document.getElementById('hex-primary').value,
+    secondary:        document.getElementById('hex-secondary').value,
+    accent:           document.getElementById('hex-accent').value,
+    design:           selectedDesign,
+    angle:            document.getElementById('angle').value,
+    stripe_width:     document.getElementById('stripe-width').value,
+    split:            document.getElementById('split-pos').value / 100,
+    direction:        document.getElementById('split-dir').value,
+    texture:          document.getElementById('texture').value,
+    texture_opacity:  document.getElementById('texture-opacity').value / 100,
+    template_opacity: document.getElementById('template-opacity').value / 100,
+  };
+}
+
+async function triggerBuild(prepend) {
+  const carId = carSelect.value;
+  if (carSelect.selectedOptions[0].dataset.ready !== 'true') return;
+  if (prepend) {
+    document.getElementById('btn-build').disabled = true;
+    setStatus('<span class="spinner"></span>Building...');
+  }
+  try {
+    const r = await fetch('/build', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(buildPayload(carId)) });
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+    setStatus('');
+    renderResult(d.image, carId);
+  } catch(e) {
+    setStatus('Error: ' + e.message, true);
+  } finally {
+    document.getElementById('btn-build').disabled = false;
+    updateTemplateStatus();
+  }
+}
+
+function renderResult(filename, carId) {
+  const el = document.getElementById('results');
+  // Clear placeholder text on first result
+  if (el.querySelector('p')) el.innerHTML = '';
+  const card = document.createElement('div');
+  card.className = 'result-card';
+  card.innerHTML = `
+    <img src="/preview/${filename}?t=${Date.now()}" alt="Livery">
+    <div class="result-footer">
+      <span class="result-label">${filename}</span>
+      <a class="btn-dl" href="/download/${filename}" download="${filename}">Download PNG</a>
+    </div>`;
+  el.prepend(card);
+}
+
+function setStatus(msg, isError = false) {
+  statusEl.innerHTML = msg;
+  statusEl.className = isError ? 'error' : '';
+}
+</script>
+</body>
+</html>

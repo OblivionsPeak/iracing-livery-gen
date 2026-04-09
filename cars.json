@@ -1,0 +1,38 @@
+{
+  "porsche992rgt3": {
+    "display_name": "Porsche 911 GT3 R",
+    "series": "IMSA / GT3",
+    "iracing_folder": "porsche992rgt3",
+    "template_url": ""
+  },
+  "porsche992cup": {
+    "display_name": "Porsche 992 Cup",
+    "series": "Carrera Cup",
+    "iracing_folder": "porsche992cup",
+    "template_url": ""
+  },
+  "ferrari_488_gt3": {
+    "display_name": "Ferrari 488 GT3",
+    "series": "GT3",
+    "iracing_folder": "ferrari488gt3",
+    "template_url": ""
+  },
+  "bmw_m4_gt3": {
+    "display_name": "BMW M4 GT3",
+    "series": "GT3",
+    "iracing_folder": "bmwm4gt3",
+    "template_url": ""
+  },
+  "mercedes_amg_gt3": {
+    "display_name": "Mercedes-AMG GT3",
+    "series": "GT3",
+    "iracing_folder": "mercedesamggt3",
+    "template_url": ""
+  },
+  "chevrolet_corvette_gt3": {
+    "display_name": "Chevrolet Corvette Z06 GT3.R",
+    "series": "IMSA / GT3",
+    "iracing_folder": "chevroletcorvetteZ06gt3r",
+    "template_url": ""
+  }
+}
