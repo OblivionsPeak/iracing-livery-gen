@@ -196,6 +196,7 @@
     <div class="design-btn" data-design="split">Split</div>
     <div class="design-btn" data-design="chevron">Chevron</div>
     <div class="design-btn" data-design="two_tone">Two-Tone</div>
+    <div class="design-btn" data-design="gradient_chevron">Grad. Chevron</div>
   </div>
 
   <div id="params-angle">
@@ -250,10 +251,11 @@
         <option value="split">Split</option>
         <option value="chevron">Chevron</option>
         <option value="two_tone">Two-Tone</option>
+        <option value="gradient_chevron">Grad. Chevron</option>
       </select>
     </div>
     <div>
-      <label>Opacity: <span id="ov-val">40%</span></label>
+      <label>Mix: <span id="ov-val">40%</span></label>
       <input type="range" id="overlay-opacity" min="0" max="90" value="40"
         style="width:100%;margin-top:6px;accent-color:#f0c040"
         oninput="document.getElementById('ov-val').textContent=this.value+'%'; scheduleLive()">

@@ -59,10 +59,13 @@ def build(
     # 1. Design layer
     canvas = _make_design(primary, secondary, accent, design, dp)
 
-    # 2. Optional pattern overlay (composited before texture)
+    # 2. Optional pattern overlay — blend a second fully-rendered design over the base
     if overlay_design and overlay_design != "none":
-        ov = _make_overlay(overlay_design, secondary, accent, dp, overlay_opacity)
-        canvas = Image.alpha_composite(canvas.convert("RGBA"), ov).convert("RGB")
+        ov_rgb   = _make_design(primary, secondary, accent, overlay_design, dp)
+        base_arr = np.array(canvas, dtype=float)
+        ov_arr   = np.array(ov_rgb, dtype=float)
+        blended  = base_arr * (1.0 - overlay_opacity) + ov_arr * overlay_opacity
+        canvas   = Image.fromarray(np.clip(blended, 0, 255).astype(np.uint8))
 
     # 3. Texture overlay
     if texture != "none":
@@ -173,6 +176,24 @@ def _make_design(primary, secondary, accent, design, params) -> Image.Image:
         angle = params.get("angle", 30)
         _draw_diagonal_split(draw, secondary, accent, angle)
 
+    elif design == "gradient_chevron":
+        # Gradient fills the chevron shape; solid primary outside
+        depth = params.get("depth", 0.35)
+        px_   = int(SIZE * 0.55)
+        half  = SIZE // 2
+        dy    = int(SIZE * depth)
+        # Build a gradient layer
+        grad = Image.new("RGB", (SIZE, SIZE), primary)
+        _draw_gradient(grad, primary, secondary, "horizontal")
+        # Chevron mask: only the arrow shape shows the gradient
+        mask = Image.new("L", (SIZE, SIZE), 0)
+        ImageDraw.Draw(mask).polygon(
+            [(0, 0), (px_ - dy, 0), (px_, half), (px_ - dy, SIZE), (0, SIZE)],
+            fill=255,
+        )
+        img.paste(grad, mask=mask)
+        draw.line([(px_ - dy, 0), (px_, half), (px_ - dy, SIZE)], fill=accent, width=18)
+
     return img
 
 
@@ -265,103 +286,6 @@ def _draw_diagonal_split(draw, secondary, accent, angle_deg):
     draw.polygon(pts, fill=secondary)
     # Accent divider line
     draw.line([(0, mid + offset), (SIZE, mid - offset)], fill=accent, width=14)
-
-
-# ---------------------------------------------------------------------------
-# Pattern overlay (transparent RGBA layer composited over base design)
-# ---------------------------------------------------------------------------
-
-def _make_overlay(design, secondary, accent, params, opacity) -> Image.Image:
-    """Render a design as a transparent RGBA overlay (shapes only, no background)."""
-    overlay = Image.new("RGBA", (SIZE, SIZE), (0, 0, 0, 0))
-    draw    = ImageDraw.Draw(overlay)
-    a   = int(opacity * 255)
-    s   = (*secondary, a)
-    ac  = (*accent,    min(a + 40, 255))
-    dp  = params
-
-    if design == "solid":
-        draw.rectangle([0, 0, SIZE, SIZE], fill=s)
-
-    elif design == "racing_stripes":
-        w, gap, angle = dp.get("stripe_width", 160), dp.get("gap", 25), dp.get("angle", 45)
-        direction = dp.get("direction", "vertical")
-        shift = int(SIZE * math.tan(math.radians(angle % 180)))
-        hs = shift // 2
-        if direction == "horizontal":
-            cy = SIZE // 2
-            draw.polygon([(0,cy-w//2-hs),(SIZE,cy-w//2+hs),(SIZE,cy+w//2+hs),(0,cy+w//2-hs)], fill=s)
-            ay = cy - w//2 - gap - 40
-            draw.polygon([(0,ay-hs),(SIZE,ay+hs),(SIZE,ay+40+hs),(0,ay+40-hs)], fill=ac)
-            by_ = cy + w//2 + gap
-            draw.polygon([(0,by_-hs),(SIZE,by_+hs),(SIZE,by_+40+hs),(0,by_+40-hs)], fill=ac)
-        else:
-            cx = SIZE // 2
-            draw.polygon([(cx-w//2-hs,0),(cx+w//2-hs,0),(cx+w//2+hs,SIZE),(cx-w//2+hs,SIZE)], fill=s)
-            lx = cx - w//2 - gap - 40
-            draw.polygon([(lx-hs,0),(lx+40-hs,0),(lx+40+hs,SIZE),(lx+hs,SIZE)], fill=ac)
-            rx = cx + w//2 + gap
-            draw.polygon([(rx-hs,0),(rx+40-hs,0),(rx+40+hs,SIZE),(rx+hs,SIZE)], fill=ac)
-
-    elif design == "diagonal_stripes":
-        angle = dp.get("angle", 45)
-        w     = dp.get("stripe_width", 140)
-        _draw_diagonal_stripes(draw, s,  angle, w)
-        _draw_diagonal_stripes(draw, ac, angle, 20, offset_fraction=0.5 * w / SIZE)
-
-    elif design == "gradient":
-        direction = dp.get("direction", "horizontal")
-        arr = np.zeros((SIZE, SIZE, 4), dtype=np.uint8)
-        c1  = np.array([*secondary, a], dtype=float)
-        c2  = np.array([*accent,    a], dtype=float)
-        t   = np.linspace(0, 1, SIZE)
-        band = (c1[None, :] * (1 - t[:, None]) + c2[None, :] * t[:, None]).astype(np.uint8)
-        if direction == "horizontal":
-            arr[:] = band
-        else:
-            arr[:] = band[:, None, :]
-            arr = arr.transpose(1, 0, 2)
-        return Image.fromarray(arr, "RGBA")
-
-    elif design == "split":
-        pos = dp.get("split", 0.5)
-        direction = dp.get("direction", "horizontal")
-        sp = int(SIZE * pos)
-        if direction == "horizontal":
-            draw.rectangle([0, sp, SIZE, SIZE], fill=s)
-            draw.rectangle([0, sp - 6, SIZE, sp + 6], fill=ac)
-        else:
-            draw.rectangle([sp, 0, SIZE, SIZE], fill=s)
-            draw.rectangle([sp - 6, 0, sp + 6, SIZE], fill=ac)
-
-    elif design == "chevron":
-        depth = dp.get("depth", 0.35)
-        px    = int(SIZE * 0.55)
-        half  = SIZE // 2
-        dy    = int(SIZE * depth)
-        draw.polygon([(0, 0), (px - dy, 0), (px, half), (px - dy, SIZE), (0, SIZE)], fill=s)
-        draw.line([(px - dy, 0), (px, half), (px - dy, SIZE)], fill=ac, width=18)
-
-    elif design == "sweep":
-        draw.polygon([
-            (0, int(SIZE * 0.55)), (int(SIZE * 0.50), 0),
-            (SIZE, 0), (SIZE, int(SIZE * 0.35)),
-            (int(SIZE * 0.55), SIZE), (0, SIZE),
-        ], fill=s)
-        draw.polygon([
-            (0, int(SIZE * 0.52)), (int(SIZE * 0.47), 0),
-            (int(SIZE * 0.50), 0), (0, int(SIZE * 0.55)),
-        ], fill=ac)
-
-    elif design == "two_tone":
-        angle  = dp.get("angle", 30)
-        tan_a  = math.tan(math.radians(angle))
-        mid    = SIZE // 2
-        offset = int(mid * tan_a)
-        draw.polygon([(0, 0), (SIZE, 0), (SIZE, mid - offset), (0, mid + offset)], fill=s)
-        draw.line([(0, mid + offset), (SIZE, mid - offset)], fill=ac, width=14)
-
-    return overlay
 
 
 # ---------------------------------------------------------------------------
