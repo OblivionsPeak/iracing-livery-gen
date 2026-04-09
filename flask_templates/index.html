@@ -81,10 +81,24 @@
   #status { margin-top: 10px; font-size: 0.82rem; color: #777; min-height: 18px; }
   #status.error { color: #e55; }
 
-  #template-status { font-size: 0.75rem; margin-top: 5px; }
-  .ok { color: #4c4; } .missing { color: #e44; }
-  #upload-section { display: none; margin-top: 10px; }
-  #upload-section input[type=file] { font-size: 0.8rem; color: #888; background: #1a1a1a; border: 1px solid #333; border-radius: 4px; padding: 6px; width: 100%; }
+  #template-status { font-size: 0.78rem; }
+  .ok { color: #4c4; } .missing { color: #888; }
+
+  #drop-zone {
+    position: relative; border: 2px dashed #333; border-radius: 6px;
+    padding: 20px 12px; text-align: center; cursor: pointer;
+    transition: border-color 0.15s; background: #141414;
+  }
+  #drop-zone:hover, #drop-zone.drag-over { border-color: #f0c040; }
+  #drop-zone.has-file { border-color: #4c4; border-style: solid; }
+  #drop-zone input[type=file] {
+    position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+  }
+  #drop-label { font-size: 0.82rem; color: #666; pointer-events: none; }
+  #drop-label span { font-size: 0.7rem; color: #444; }
+
+  details summary { list-style: none; }
+  details summary::-webkit-details-marker { display: none; }
 
   #params-angle, #params-split { display: none; margin-top: 6px; }
 
@@ -116,26 +130,31 @@
 <!-- ── LEFT PANEL ── -->
 <div class="panel">
 
-  <div class="section-title">Car</div>
-  <select id="car-select">
-    {% for car in cars %}
-    <option value="{{ car.id }}" data-ready="{{ car.template_ready | lower }}">
-      {{ car.name }} — {{ car.series }}
-    </option>
-    {% endfor %}
-  </select>
-  <div id="template-status"></div>
+  <div class="section-title">Car &amp; Template</div>
 
-  <div id="upload-section">
-    <label>Upload template (.png / .psd / .tga)</label>
+  <!-- Quick drop zone — works without picking from dropdown -->
+  <div id="drop-zone">
     <input type="file" id="template-file" accept=".png,.psd,.tga,.zip">
-    <label style="margin-top:8px;">Or paste direct download URL</label>
-    <input type="text" id="template-url" placeholder="https://...">
-    <div style="font-size:0.7rem;color:#444;margin-top:4px;">
-      Get templates: members.iracing.com → Garage → select car → Paint Templates
-    </div>
+    <div id="drop-label">Drop or click to upload any car template<br><span>PNG · PSD · TGA</span></div>
   </div>
-  <button class="btn-fetch" id="btn-fetch">Download / Load Template</button>
+  <div id="template-status" style="margin-top:6px;"></div>
+
+  <!-- Optional: pick from known cars to set iRacing folder name for export -->
+  <details style="margin-top:10px;">
+    <summary style="font-size:0.78rem;color:#555;cursor:pointer;">Select known car (optional — for iRacing export)</summary>
+    <select id="car-select" style="margin-top:8px;">
+      <option value="custom">— none / auto-detect —</option>
+      {% for series, cars in groups.items() %}
+      <optgroup label="{{ series }}">
+        {% for car in cars %}
+        <option value="{{ car.id }}" data-ready="{{ car.template_ready | lower }}">
+          {{ car.name }}{% if car.template_ready %} ✓{% endif %}
+        </option>
+        {% endfor %}
+      </optgroup>
+      {% endfor %}
+    </select>
+  </details>
 
   <!-- COLORS -->
   <div class="section-title">Colors</div>
@@ -250,20 +269,62 @@
 <script>
 const carSelect = document.getElementById('car-select');
 const statusEl  = document.getElementById('status');
+const dropZone  = document.getElementById('drop-zone');
+const fileInput = document.getElementById('template-file');
+let   activeCar = null;  // set after template is uploaded
 
-// ── Template status ──
-function updateTemplateStatus() {
-  const opt   = carSelect.selectedOptions[0];
-  const ready = opt.dataset.ready === 'true';
-  const el    = document.getElementById('template-status');
-  el.textContent = ready ? '✓ Template ready' : '✗ Template not uploaded';
-  el.className   = 'template-status ' + (ready ? 'ok' : 'missing');
-  document.getElementById('upload-section').style.display = ready ? 'none' : 'block';
-  document.getElementById('btn-build').disabled = !ready;
-  document.getElementById('btn-vary').disabled  = !ready;
+// ── Drop zone ──
+dropZone.addEventListener('dragover',  e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('drag-over');
+  if (e.dataTransfer.files.length) {
+    fileInput.files = e.dataTransfer.files;
+    handleFileSelected(e.dataTransfer.files[0]);
+  }
+});
+fileInput.addEventListener('change', () => {
+  if (fileInput.files.length) handleFileSelected(fileInput.files[0]);
+});
+
+function handleFileSelected(file) {
+  document.getElementById('drop-label').innerHTML =
+    `<strong style="color:#ddd">${file.name}</strong><br><span>Click Upload Template to process</span>`;
+  dropZone.classList.add('has-file');
+  uploadTemplate();
 }
-carSelect.addEventListener('change', updateTemplateStatus);
-updateTemplateStatus();
+
+async function uploadTemplate() {
+  if (!fileInput.files.length) return;
+  const carId = carSelect.value;
+  setStatus('<span class="spinner"></span>Processing template...');
+  document.getElementById('btn-build').disabled = true;
+
+  const form = new FormData();
+  form.append('car_id', carId === 'custom' ? '' : carId);
+  form.append('file', fileInput.files[0]);
+
+  try {
+    const r = await fetch('/upload-template', { method: 'POST', body: form });
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+    activeCar = d.car_id;
+    document.getElementById('template-status').textContent = `✓ Template ready (${activeCar})`;
+    document.getElementById('template-status').className = 'ok';
+    document.getElementById('btn-build').disabled = false;
+    document.getElementById('btn-vary').disabled  = false;
+    setStatus('');
+    scheduleLive();
+  } catch(e) {
+    setStatus('Error: ' + e.message, true);
+    document.getElementById('btn-build').disabled = true;
+  }
+}
+
+function getCarId() {
+  return activeCar || (carSelect.value !== 'custom' ? carSelect.value : 'custom');
+}
 
 // ── Color pickers with live preview ──
 let liveTimer = null;
@@ -312,35 +373,16 @@ document.querySelectorAll('.design-btn').forEach(btn => {
   });
 });
 
-// ── Template fetch / upload ──
-document.getElementById('btn-fetch').addEventListener('click', async () => {
-  const carId = carSelect.value;
-  const file  = document.getElementById('template-file');
-  const url   = document.getElementById('template-url').value.trim();
-  document.getElementById('btn-fetch').disabled = true;
-  setStatus('<span class="spinner"></span>Processing template...');
-  try {
-    let r;
-    if (file.files.length > 0) {
-      const form = new FormData();
-      form.append('car_id', carId);
-      form.append('file', file.files[0]);
-      r = await fetch('/upload-template', { method: 'POST', body: form });
-    } else {
-      r = await fetch('/fetch-template', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ car_id: carId, url: url || null })
-      });
-    }
-    const data = await r.json();
-    if (data.error) throw new Error(data.error);
-    carSelect.selectedOptions[0].dataset.ready = 'true';
-    updateTemplateStatus();
-    setStatus('Template ready.');
-  } catch(e) {
-    setStatus('Error: ' + e.message, true);
-  } finally {
-    document.getElementById('btn-fetch').disabled = false;
+// ── Car dropdown change ──
+carSelect.addEventListener('change', () => {
+  const opt = carSelect.selectedOptions[0];
+  if (opt.dataset.ready === 'true') {
+    activeCar = carSelect.value;
+    document.getElementById('template-status').textContent = `✓ Template ready (${activeCar})`;
+    document.getElementById('template-status').className = 'ok';
+    document.getElementById('btn-build').disabled = false;
+    document.getElementById('btn-vary').disabled  = false;
+    scheduleLive();
   }
 });
 
@@ -348,13 +390,12 @@ document.getElementById('btn-fetch').addEventListener('click', async () => {
 document.getElementById('btn-build').addEventListener('click', () => triggerBuild(true));
 
 document.getElementById('btn-vary').addEventListener('click', async () => {
-  const carId   = carSelect.value;
   const designs = ['solid','racing_stripes','diagonal_stripes','sweep','gradient','chevron','split','two_tone'];
   const angles  = [30, 45, 60];
   document.getElementById('btn-vary').disabled = true;
   setStatus('<span class="spinner"></span>Generating 4 variations...');
   for (let i = 0; i < 4; i++) {
-    const p = buildPayload(carId);
+    const p = buildPayload();
     p.design       = designs[Math.floor(Math.random() * designs.length)];
     p.angle        = angles[Math.floor(Math.random() * angles.length)];
     p.stripe_width = 80 + Math.floor(Math.random() * 200);
@@ -368,9 +409,9 @@ document.getElementById('btn-vary').addEventListener('click', async () => {
   document.getElementById('btn-vary').disabled = false;
 });
 
-function buildPayload(carId) {
+function buildPayload(carId = null) {
   return {
-    car_id:           carId,
+    car_id:           carId || getCarId(),
     primary:          document.getElementById('hex-primary').value,
     secondary:        document.getElementById('hex-secondary').value,
     accent:           document.getElementById('hex-accent').value,
@@ -386,14 +427,13 @@ function buildPayload(carId) {
 }
 
 async function triggerBuild(prepend) {
-  const carId = carSelect.value;
-  if (carSelect.selectedOptions[0].dataset.ready !== 'true') return;
+  if (!activeCar) return;
   if (prepend) {
     document.getElementById('btn-build').disabled = true;
     setStatus('<span class="spinner"></span>Building...');
   }
   try {
-    const r = await fetch('/build', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(buildPayload(carId)) });
+    const r = await fetch('/build', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(buildPayload()) });
     const d = await r.json();
     if (d.error) throw new Error(d.error);
     setStatus('');

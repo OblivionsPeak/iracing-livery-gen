@@ -1,38 +1,39 @@
 {
-  "porsche992rgt3": {
-    "display_name": "Porsche 911 GT3 R",
-    "series": "IMSA / GT3",
-    "iracing_folder": "porsche992rgt3",
-    "template_url": ""
+  "_comment": "iracing_folder must match the folder name under Documents/iRacing/paint/",
+
+  "GT3": {
+    "acuransxevo22gt3":   { "display_name": "Acura NSX Evo22 GT3",           "series": "GT3" },
+    "amvantageevogt3":    { "display_name": "Aston Martin Vantage GT3 Evo",   "series": "GT3" },
+    "audir8gt3":          { "display_name": "Audi R8 GT3",                    "series": "GT3" },
+    "audir8lmsevo2gt3":   { "display_name": "Audi R8 LMS Evo II GT3",         "series": "GT3" },
+    "bmwm4gt3":           { "display_name": "BMW M4 GT3",                     "series": "GT3" },
+    "bmwz4gt3":           { "display_name": "BMW Z4 GT3",                     "series": "GT3" },
+    "chevyvettez06rgt3":  { "display_name": "Chevrolet Corvette Z06 GT3.R",   "series": "GT3" },
+    "ferrari296gt3":      { "display_name": "Ferrari 296 GT3",                "series": "GT3" },
+    "ferrari488gt3":      { "display_name": "Ferrari 488 GT3",                "series": "GT3" },
+    "ferrarievogt3":      { "display_name": "Ferrari 488 GT3 Evo",            "series": "GT3" },
+    "fordmustanggt3":     { "display_name": "Ford Mustang GT3",               "series": "GT3" },
+    "lamborghinievogt3":  { "display_name": "Lamborghini Huracán GT3 EVO",    "series": "GT3" },
+    "mclaren720sgt3":     { "display_name": "McLaren 720S GT3",               "series": "GT3" },
+    "mercedesamgevogt3":  { "display_name": "Mercedes-AMG GT3 Evo",           "series": "GT3" },
+    "mercedesamggt3":     { "display_name": "Mercedes-AMG GT3",               "series": "GT3" },
+    "porsche911rgt3":     { "display_name": "Porsche 911 GT3 R (991.2)",      "series": "GT3" },
+    "porsche992rgt3":     { "display_name": "Porsche 911 GT3 R (992)",        "series": "GT3" },
+    "rufrt12r":           { "display_name": "Ruf RT 12R",                     "series": "GT3" }
   },
-  "porsche992cup": {
-    "display_name": "Porsche 992 Cup",
-    "series": "Carrera Cup",
-    "iracing_folder": "porsche992cup",
-    "template_url": ""
+
+  "GT4": {
+    "amvantagegt4":       { "display_name": "Aston Martin Vantage GT4",       "series": "GT4" },
+    "bmwm4evogt4":        { "display_name": "BMW M4 GT4 Evo",                 "series": "GT4" },
+    "bmwm4gt4":           { "display_name": "BMW M4 GT4",                     "series": "GT4" },
+    "fordmustanggt4":     { "display_name": "Ford Mustang GT4",               "series": "GT4" },
+    "mclaren570sgt4":     { "display_name": "McLaren 570S GT4",               "series": "GT4" },
+    "mercedesamggt4":     { "display_name": "Mercedes-AMG GT4",               "series": "GT4" },
+    "porsche718gt4":      { "display_name": "Porsche 718 Cayman GT4",         "series": "GT4" },
+    "porsche992cup":      { "display_name": "Porsche 992 Cup",                "series": "GT4" }
   },
-  "ferrari_488_gt3": {
-    "display_name": "Ferrari 488 GT3",
-    "series": "GT3",
-    "iracing_folder": "ferrari488gt3",
-    "template_url": ""
-  },
-  "bmw_m4_gt3": {
-    "display_name": "BMW M4 GT3",
-    "series": "GT3",
-    "iracing_folder": "bmwm4gt3",
-    "template_url": ""
-  },
-  "mercedes_amg_gt3": {
-    "display_name": "Mercedes-AMG GT3",
-    "series": "GT3",
-    "iracing_folder": "mercedesamggt3",
-    "template_url": ""
-  },
-  "chevrolet_corvette_gt3": {
-    "display_name": "Chevrolet Corvette Z06 GT3.R",
-    "series": "IMSA / GT3",
-    "iracing_folder": "chevroletcorvetteZ06gt3r",
-    "template_url": ""
+
+  "LMP2": {
+    "dallarap217":        { "display_name": "Dallara P217 LMP2",              "series": "LMP2" }
   }
 }

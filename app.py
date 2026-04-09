@@ -29,23 +29,35 @@ TEMPLATES_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def load_cars() -> dict:
+    """Return flat {car_id: info} dict, ignoring group keys and _comment."""
     with open(CARS_JSON) as f:
-        return json.load(f)
+        raw = json.load(f)
+    flat = {}
+    for key, val in raw.items():
+        if key.startswith("_"):
+            continue
+        if isinstance(val, dict) and "display_name" not in val:
+            # It's a group (GT3, GT4, etc.) — flatten its children
+            for cid, info in val.items():
+                flat[cid] = info
+        else:
+            flat[key] = val
+    return flat
 
 
 @app.route("/")
 def index():
     cars = load_cars()
-    car_list = [
-        {
+    # Group cars by series for the dropdown
+    groups: dict[str, list] = {}
+    for cid, info in cars.items():
+        series = info.get("series", "Other")
+        groups.setdefault(series, []).append({
             "id":             cid,
             "name":           info["display_name"],
-            "series":         info.get("series", ""),
             "template_ready": (TEMPLATES_DIR / cid / "template.png").exists(),
-        }
-        for cid, info in cars.items()
-    ]
-    return render_template("index.html", cars=car_list)
+        })
+    return render_template("index.html", groups=groups)
 
 
 # ---------------------------------------------------------------------------
@@ -67,9 +79,13 @@ def fetch_template():
 
 @app.route("/upload-template", methods=["POST"])
 def upload_template():
-    car_id = request.form.get("car_id")
-    if not car_id:
-        return jsonify({"error": "car_id required"}), 400
+    car_id = request.form.get("car_id", "").strip()
+    # If no car selected from dropdown, derive an id from the uploaded filename
+    if not car_id or car_id == "custom":
+        raw_name = request.files.get("file", None)
+        fname = secure_filename(raw_name.filename) if raw_name else "custom"
+        car_id = Path(fname).stem.lower().replace(" ", "_").replace("-", "_") or "custom"
+
     if "file" not in request.files or not request.files["file"].filename:
         return jsonify({"error": "No file provided"}), 400
 
@@ -93,7 +109,7 @@ def upload_template():
 
     from pipeline.template_processor import build_controlnet_map
     build_controlnet_map(template_path, destdir / "controlnet_map.png")
-    return jsonify({"status": "ok"})
+    return jsonify({"status": "ok", "car_id": car_id})
 
 
 # ---------------------------------------------------------------------------
