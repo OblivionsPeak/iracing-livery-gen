@@ -88,12 +88,29 @@ def _make_design(primary, secondary, accent, design, params) -> Image.Image:
 
     elif design == "racing_stripes":
         # Classic Le Mans style — one wide centre stripe + two thin accents
+        # Angle tilts the stripes as parallelograms
         w = params.get("stripe_width", 160)
         gap = params.get("gap", 25)
+        angle = params.get("angle", 45)
         cx = SIZE // 2
-        draw.rectangle([cx - w // 2, 0, cx + w // 2, SIZE], fill=secondary)
-        draw.rectangle([cx - w // 2 - gap - 40, 0, cx - w // 2 - gap, SIZE], fill=accent)
-        draw.rectangle([cx + w // 2 + gap, 0, cx + w // 2 + gap + 40, SIZE], fill=accent)
+        shift = int(SIZE * math.tan(math.radians(angle % 180)))
+        # Centre stripe
+        draw.polygon([
+            (cx - w // 2, 0), (cx + w // 2, 0),
+            (cx + w // 2 + shift, SIZE), (cx - w // 2 + shift, SIZE),
+        ], fill=secondary)
+        # Left accent
+        lx = cx - w // 2 - gap - 40
+        draw.polygon([
+            (lx, 0), (lx + 40, 0),
+            (lx + 40 + shift, SIZE), (lx + shift, SIZE),
+        ], fill=accent)
+        # Right accent
+        rx = cx + w // 2 + gap
+        draw.polygon([
+            (rx, 0), (rx + 40, 0),
+            (rx + 40 + shift, SIZE), (rx + shift, SIZE),
+        ], fill=accent)
 
     elif design == "diagonal_stripes":
         angle = params.get("angle", 45)
