@@ -293,7 +293,59 @@ def _make_design(primary, secondary, accent, design, params) -> Image.Image:
             fill=accent,
         )
 
+    elif design == "shard":
+        _draw_shards(img, primary, secondary, accent, params)
+
     return img
+
+
+def _draw_shards(img, primary, secondary, accent, params):
+    """Tearing/fragmentation effect — aggressive car wrap style radiating from focal point."""
+    cx_frac   = params.get("cx_frac", 0.35)
+    cy_frac   = params.get("cy_frac", 0.55)
+    count     = int(params.get("shard_count", 12))
+    roughness = params.get("shard_roughness", params.get("roughness", 0.6))
+    fade_r    = params.get("fade_radius", 0.3)
+
+    cx = cx_frac * SIZE
+    cy = cy_frac * SIZE
+
+    y_grid, x_grid = np.mgrid[0:SIZE, 0:SIZE]
+    dx = x_grid - cx
+    dy = y_grid - cy
+    dist = np.sqrt(dx**2 + dy**2)
+    angle = np.arctan2(dy, dx)
+
+    rng = np.random.default_rng(42)
+    noise_map = rng.standard_normal((SIZE, SIZE)).astype(np.float32)
+    noise_img = Image.fromarray(((noise_map + 3) / 6 * 255).clip(0, 255).astype(np.uint8), mode='L')
+    noise_img = noise_img.filter(ImageFilter.GaussianBlur(radius=40))
+    noise_smooth = (np.array(noise_img, dtype=np.float32) / 255.0 - 0.5) * 2.0
+
+    dist_norm = (dist / (SIZE * 0.7)).clip(0, 1)
+    perturbation = noise_smooth * roughness * dist_norm * math.pi / count
+    perturbed_angle = angle + perturbation
+
+    shard_wave = np.sin(perturbed_angle * count)
+    is_secondary = shard_wave > 0
+    fade_mask = dist < (fade_r * SIZE)
+    is_secondary[fade_mask] = False
+
+    c1 = np.array(primary,   dtype=np.float32)
+    c2 = np.array(secondary, dtype=np.float32)
+    result = np.where(is_secondary[..., None], c2, c1).astype(np.uint8)
+    img.paste(Image.fromarray(result), (0, 0))
+
+    # Accent crack lines along shard boundaries
+    edge_h = np.diff(is_secondary.astype(np.int8), axis=1)
+    edge_v = np.diff(is_secondary.astype(np.int8), axis=0)
+    crack = np.zeros((SIZE, SIZE), dtype=bool)
+    crack[:, :-1] |= edge_h != 0
+    crack[:-1, :] |= edge_v != 0
+    crack[fade_mask] = False
+    result_arr = np.array(img)
+    result_arr[crack] = np.array(accent, dtype=np.uint8)
+    img.paste(Image.fromarray(result_arr), (0, 0))
 
 
 def _draw_diagonal_stripes(draw, color, angle_deg, stripe_width, offset_fraction=0.0):

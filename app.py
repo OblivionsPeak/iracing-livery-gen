@@ -241,12 +241,31 @@ def build_livery():
         )
     except Exception as e:
         import traceback
-        log_debug(f"BUILD ERROR: {traceback.format_exc()}")
+        print(f"BUILD ERROR: {traceback.format_exc()}")
         return jsonify({"error": str(e)}), 500
 
     base_name = f"{car_id}_{int(time.time() * 1000)}"
     file_clean = f"{base_name}_clean.png"
     file_baked = f"{base_name}_baked.png"
+    file_spec  = f"{base_name}_spec.png"
+
+    # Serialize images to RAM cache (evict oldest if full)
+    entries = [(file_clean, img_clean), (file_baked, img_baked), (file_spec, spec_map)]
+    for fname, pil_img in entries:
+        buf = io.BytesIO()
+        pil_img.save(buf, format="PNG")
+        PREVIEW_CACHE[fname] = buf.getvalue()
+        if len(PREVIEW_CACHE) > MAX_CACHE_SIZE:
+            PREVIEW_CACHE.popitem(last=False)
+
+    return jsonify({
+        "status":      "ok",
+        "image_baked": file_baked,
+        "image_clean": file_clean,
+        "image_spec":  file_spec,
+    })
+
+
 # ---------------------------------------------------------------------------
 
 @app.route("/preview/<filename>")

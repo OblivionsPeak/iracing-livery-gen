@@ -442,6 +442,36 @@
                 </div>
              </div>
           </template>
+
+          <!-- Shard Settings -->
+          <template x-if="layer.type === 'design' && layer.id === 'shard'">
+            <div style="display:flex; flex-direction:column; gap:8px;">
+              <div class="row" style="gap:10px;">
+                <div style="flex:1">
+                  <label>Shards <span class="val" x-text="layer.params.shard_count || 12"></span></label>
+                  <input type="range" min="4" max="32" :value="layer.params.shard_count || 12"
+                    @input="layer.params.shard_count = parseInt($event.target.value); markChanged()">
+                </div>
+                <div style="flex:1">
+                  <label>Roughness <span class="val" x-text="Math.round((layer.params.shard_roughness || 0.6) * 100) + '%'"></span></label>
+                  <input type="range" min="0" max="100" :value="Math.round((layer.params.shard_roughness || 0.6) * 100)"
+                    @input="layer.params.shard_roughness = $event.target.value / 100; markChanged()">
+                </div>
+              </div>
+              <div class="row" style="gap:10px;">
+                <div style="flex:1">
+                  <label>Fade Core <span class="val" x-text="Math.round((layer.params.fade_radius || 0.3) * 100) + '%'"></span></label>
+                  <input type="range" min="0" max="60" :value="Math.round((layer.params.fade_radius || 0.3) * 100)"
+                    @input="layer.params.fade_radius = $event.target.value / 100; markChanged()">
+                </div>
+                <div style="flex:1">
+                  <label>H Position <span class="val" x-text="Math.round((layer.params.cx_frac || 0.5) * 100) + '%'"></span></label>
+                  <input type="range" min="10" max="90" :value="Math.round((layer.params.cx_frac || 0.5) * 100)"
+                    @input="layer.params.cx_frac = $event.target.value / 100; markChanged()">
+                </div>
+              </div>
+            </div>
+          </template>
         </div>
       </div>
     </template>
@@ -553,7 +583,8 @@ const DESIGNS = [
   {id:'radial_gradient', name:'Radial', svg:'<svg><circle cx="12" cy="12" r="10" fill="currentColor" fill-opacity="0.5"/></svg>'},
   {id:'harlequin', name:'Harlequin', svg:'<svg><path d="M12 0l6 6-6 6-6-6z M12 12l6 6-6 6-6-6z M0 6l6 6-6 6-6-6z M24 6l-6 6-6-6 6-6z"/></svg>'},
   {id:'pinstripe', name:'Pinstripe', svg:'<svg><path d="M0 20L20 0h2L0 22zM0 10L10 0h2L0 12z" /></svg>'},
-  {id:'number_panel', name:'Num Panel', svg:'<svg><rect width="24" height="24" fill="currentColor" fill-opacity="0.2"/><rect x="6" y="8" width="12" height="8" rx="1"/></svg>'}
+  {id:'number_panel', name:'Num Panel', svg:'<svg><rect width="24" height="24" fill="currentColor" fill-opacity="0.2"/><rect x="6" y="8" width="12" height="8" rx="1"/></svg>'},
+  {id:'shard', name:'Shard', svg:'<svg><path d="M12 2 L22 12 L12 22 L2 12 Z M12 2 L8 8 L12 14 L16 8 Z" fill="currentColor" fill-opacity="0.7"/></svg>'}
 ];
 
 document.addEventListener('alpine:init', () => {
