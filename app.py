@@ -28,13 +28,20 @@ app.config["MAX_CONTENT_LENGTH"] = 64 * 1024 * 1024  # 64 MB upload limit
 CARS_JSON     = Path("cars.json")
 TEMPLATES_DIR = Path("car_templates")
 LOGOS_DIR     = Path("static/logos")
-
-PREVIEW_CACHE = collections.OrderedDict()
-MAX_CACHE_SIZE = 20
+PREVIEWS_DIR  = Path("static/previews")
 
 # Create runtime dirs
 TEMPLATES_DIR.mkdir(parents=True, exist_ok=True)
 LOGOS_DIR.mkdir(parents=True, exist_ok=True)
+PREVIEWS_DIR.mkdir(parents=True, exist_ok=True)
+
+def _cleanup_previews():
+    """Purge preview files older than 2 hours to save disk space."""
+    now = time.time()
+    for f in PREVIEWS_DIR.glob("*.png"):
+        if now - f.stat().st_mtime > 7200:
+            try: f.unlink()
+            except: pass
 
 
 def _clamp(val, lo, hi, default):
@@ -230,6 +237,7 @@ def build_livery():
             "opacity": l.get("opacity", 1.0)
         })
 
+    _cleanup_previews()
     try:
         from pipeline.livery_builder import build, hex_to_rgb
         img_clean, img_baked, spec_map = build(
@@ -241,7 +249,8 @@ def build_livery():
             texture          = str(data.get("texture", "none")).lower().strip(),
             texture_opacity  = texture_opacity,
             template_opacity = template_opacity,
-            grunge_amount    = _clamp(data.get("grunge_amount", 0.0), 0.0, 1.0, 0.0)
+            grunge_amount    = _clamp(data.get("grunge_amount", 0.0), 0.0, 1.0, 0.0),
+            size             = 1024 # PREVIEW SCALE: 4x faster than 2048
         )
     except Exception as e:
         import traceback
@@ -253,14 +262,10 @@ def build_livery():
     file_baked = f"{base_name}_baked.png"
     file_spec  = f"{base_name}_spec.png"
 
-    # Serialize images to RAM cache (evict oldest if full)
-    entries = [(file_clean, img_clean), (file_baked, img_baked), (file_spec, spec_map)]
-    for fname, pil_img in entries:
-        buf = io.BytesIO()
-        pil_img.save(buf, format="PNG", compress_level=1)  # fast encode; ~same file size
-        PREVIEW_CACHE[fname] = buf.getvalue()
-        if len(PREVIEW_CACHE) > MAX_CACHE_SIZE:
-            PREVIEW_CACHE.popitem(last=False)
+    # Save to disk cache for multi-worker support
+    img_clean.save(PREVIEWS_DIR / file_clean, compress_level=1)
+    img_baked.save(PREVIEWS_DIR / file_baked, compress_level=1)
+    spec_map.save(PREVIEWS_DIR / file_spec, compress_level=1)
 
     return jsonify({
         "status":      "ok",
@@ -311,17 +316,19 @@ def template_debug(car_id):
 
 @app.route("/preview/<filename>")
 def preview(filename):
-    if filename not in PREVIEW_CACHE:
-        return "Not found in RAM cache", 404
-    return send_file(io.BytesIO(PREVIEW_CACHE[filename]), mimetype="image/png")
+    path = PREVIEWS_DIR / filename
+    if not path.exists():
+        return "Not found in cache", 404
+    return send_file(path, mimetype="image/png")
 
 
 @app.route("/download/<filename>")
 def download(filename):
-    if filename not in PREVIEW_CACHE:
-        return "Not found in RAM cache", 404
+    path = PREVIEWS_DIR / filename
+    if not path.exists():
+        return "Not found in cache", 404
     return send_file(
-        io.BytesIO(PREVIEW_CACHE[filename]),
+        path,
         mimetype="image/png",
         as_attachment=True,
         download_name=filename,
@@ -355,7 +362,8 @@ def export_tga():
         texture = data.get("texture", "none"),
         texture_opacity = float(data.get("texture_opacity", 0.25)),
         template_opacity = 0, # FORCE NO WIREFRAMES FOR TGA
-        grunge_amount = float(data.get("grunge_amount", 0.0))
+        grunge_amount = float(data.get("grunge_amount", 0.0)),
+        size = 2048 # MASTER EXPORT RESOLUTION
     )
 
     # 2. Package into ZIP
@@ -390,10 +398,11 @@ def export_to_iracing():
 
     # FORCE USE CLEAN BUFFER IF POSSIBLE
     clean_filename = filename.replace("_baked.png", "_clean.png")
-    target_file = clean_filename if clean_filename in PREVIEW_CACHE else filename
+    target_file = clean_filename if (PREVIEWS_DIR / clean_filename).exists() else filename
+    target_path = PREVIEWS_DIR / target_file
 
-    if target_file not in PREVIEW_CACHE:
-        return jsonify({"error": "Preview RAM stream not found"}), 404
+    if not target_path.exists():
+        return jsonify({"error": "Preview disk stream not found"}), 404
 
     paint_dir = Path.home() / "Documents" / "iRacing" / "paint" / car_id
     if not paint_dir.exists():
@@ -403,9 +412,9 @@ def export_to_iracing():
 
     dest = paint_dir / f"car_{car_number}.tga" # Save as TGA for iRacing
     
-    # Convert PNG bytes from cache to TGA using PIL
+    # Convert PNG from disk to TGA using PIL
     from PIL import Image
-    img = Image.open(io.BytesIO(PREVIEW_CACHE[target_file]))
+    img = Image.open(target_path)
     img.save(dest, format="TGA")
     
     return jsonify({"status": "ok", "exported_to": str(dest)})

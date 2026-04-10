@@ -327,11 +327,15 @@
     <span style="font-size:0.7rem; font-weight: 600; color:var(--text-muted); display:flex; align-items:center; margin-right: 4px;">PRESETS</span>
     <button class="preset-btn" @click="applyPreset('#0a0a0a', '#c8102e', '#ffffff')">GT Red</button>
     <button class="preset-btn" @click="applyPreset('#ffffff', '#003087', '#c8102e')">Gulf</button>
-    <button class="preset-btn" @click="applyPreset('#003087', '#ffd700', '#ffffff')">Rothmans</button>
-    <button class="preset-btn" @click="applyPreset('#1b1b1b', '#ffd700', '#888888')">Carbon Gold</button>
-    <button class="preset-btn" @click="applyPreset('#006341', '#ffffff', '#ffd700')">British Green</button>
+    <button class="preset-btn" @click="applyPreset('#003399', '#ffd700', '#ffff00')">Subaru WRT</button>
+    <button class="preset-btn" @click="applyPreset('#000000', '#c5a059', '#888888')">JPS</button>
+    <button class="preset-btn" @click="applyPreset('#ff6600', '#006633', '#ffffff')">Renown 787B</button>
+    <button class="preset-btn" @click="applyPreset('#ffffff', '#008037', '#ed1c24')">Castrol</button>
+    <button class="preset-btn" @click="applyPreset('#f19eb5', '#d01f3c', '#ffffff')">Pink Pig</button>
+    <button class="preset-btn" @click="applyPreset('#001c32', '#fbe106', '#e21b4d')">Red Bull</button>
+    <button class="preset-btn" @click="applyPreset('#004ba0', '#ffd200', '#ffffff')">Sunoco</button>
+    <button class="preset-btn" @click="applyPreset('#129c5a', '#ef3340', '#ffffff')">Benetton</button>
     <button class="preset-btn" @click="applyPreset('#e8e8e8', '#cc0000', '#111111')">Martini</button>
-    <button class="preset-btn" @click="applyPreset('#2d2d2d', '#ff6b00', '#ffffff')">Stealth</button>
   </div>
   
   <div class="color-grid">
@@ -813,6 +817,7 @@ document.addEventListener('alpine:init', () => {
       this.config.secondary = s;
       this.config.accent = a;
       this.markChanged();
+      this.showToast(`Applied Preset Palette.`);
     },
     
     showToast(msg) {
