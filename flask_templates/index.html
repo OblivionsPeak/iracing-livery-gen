@@ -657,10 +657,10 @@ document.addEventListener('alpine:init', () => {
       this.config.texture = 'none';
       this.config.overlay_opacity = 0;
       this.config.template_opacity = 35;
-      this.history = []; // Clear history to prevent accidental undo to broken state
+      this.history = []; // Complete flush
       this.historyIndex = -1;
       this.markChanged();
-      this.showToast("✓ Design reset to solid.");
+      this.showToast("✓ Clean Slate: Design Reset.");
     },
 
     undo() {
@@ -808,7 +808,8 @@ document.addEventListener('alpine:init', () => {
         this.statusError = false;
         this.previewClean = d.image_clean;
         this.previewBaked = d.image_baked;
-        this.timestamp = Date.now();
+        // High-entropy cache buster
+        this.timestamp = Date.now() + "_" + Math.floor(Math.random() * 100000);
         if (this.viewMode === '3d') {
             this.updateThreeTexture();
         }

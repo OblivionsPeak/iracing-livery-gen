@@ -47,7 +47,8 @@ def build(
 
     # 2. Optional pattern overlay — blend a second fully-rendered design over the base
     ov_name = (overlay_design or "none").lower().strip()
-    if ov_name != "none":
+    if ov_name not in ["none", "null", "", "solid"]:
+        # Defensive check: only render a real pattern as an overlay
         ov_rgb   = _make_design(primary, secondary, accent, ov_name, dp)
         base_arr = np.array(canvas, dtype=float)
         ov_arr   = np.array(ov_rgb, dtype=float)
