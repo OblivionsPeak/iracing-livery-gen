@@ -119,15 +119,20 @@ def upload_template():
         
         pil_img.save(template_path)
         
-        # PRE-COMPUTE EDGE MASK FOR RENDERING Loop
+        # ADVANCED EDGE MASK: Use Morphological Gradient to find seams, ignoring large color blocks
         grey = np.array(pil_img.convert("L"))
-        # High thresholds ensure we only catch the sharpest seam lines, not logos
-        edges = cv2.Canny(grey, 100, 200)
+        kernel = np.ones((3,3), np.uint8)
+        # Gradient finds the absolute difference between dilation and erosion (seams)
+        gradient = cv2.morphologyEx(grey, cv2.MORPH_GRADIENT, kernel)
+        # Sharpen and threshold to get crisp panel lines
+        _, mask_binary = cv2.threshold(gradient, 40, 255, cv2.THRESH_BINARY)
         
-        mask = np.zeros((grey.shape[0], grey.shape[1], 4), dtype=np.uint8)
-        mask[edges > 0] = [255, 255, 255, 255]
+        # Final clean mask (White edges on transparent)
+        mask_rgba = np.zeros((grey.shape[0], grey.shape[1], 4), dtype=np.uint8)
+        mask_rgba[mask_binary > 0] = [255, 255, 255, 255]
+        
         from PIL import Image
-        Image.fromarray(mask, "RGBA").save(destdir / "edge_mask.png")
+        Image.fromarray(mask_rgba, "RGBA").save(destdir / "edge_mask.png")
 
     except Exception as e:
         return jsonify({"error": f"Could not process template: {e}"}), 500
