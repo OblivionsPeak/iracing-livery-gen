@@ -61,24 +61,23 @@ def build(
         l_params = layer.get("params", {})
         l_metallic = int(layer.get("metallic", 0) * 255)
         l_roughness = int(layer.get("roughness", 0.1) * 255)
-        l_opacity = layer.get("opacity", 1.0)
-        
-        # A. Render the visual contribution
+
+        # A. Render the visual contribution; capture it so we can reuse it as the PBR mask
+        pbr_mask = None
         if l_type == "design":
-            layer_img = _make_design_standalone(primary, secondary, accent, l_id, l_params)
-            # Use alpha blending if the design isn't solid
-            main_canvas.paste(layer_img, (0,0))
+            layer_img = _make_design(primary, secondary, accent, l_id, l_params)
+            main_canvas.paste(layer_img, (0, 0))
+            pbr_mask = layer_img.convert("L")   # reuse render — no double work
         elif l_type == "logo":
             lp = l_params.get("path")
             if lp and Path(lp).exists():
                 main_canvas = _overlay_logo(main_canvas, lp, l_params)
+                pbr_mask = _make_logo_mask(lp, l_params)
 
-        # B. Render the PBR contribution to Spec Map
-        # Create a mask for this layer to apply metallic/roughness
-        mask = _make_layer_mask(l_type, l_id, l_params)
-        if mask:
+        # B. Write PBR metallic/roughness to spec map using the same mask
+        if pbr_mask is not None:
             pbr_fill = Image.new("RGB", (SIZE, SIZE), (l_metallic, l_roughness, 0))
-            spec_canvas.paste(pbr_fill, (0,0), mask=mask)
+            spec_canvas.paste(pbr_fill, (0, 0), mask=pbr_mask)
 
     # 2. Texture overlay (surface patterns)
     if texture != "none":
@@ -96,6 +95,9 @@ def build(
         edge_mask_path = template_path.parent / "edge_mask.png"
         if edge_mask_path.exists():
             main_canvas = _overlay_edge_mask(main_canvas, edge_mask_path, template_opacity)
+        elif template_path.exists():
+            # No edge mask yet — composite the raw template directly at reduced opacity
+            main_canvas = _overlay_template_direct(main_canvas, template_path, template_opacity)
 
     # Return clean/baked visual and the one spec map
     return canvas_clean, main_canvas, spec_canvas
@@ -538,41 +540,36 @@ def _overlay_logo(canvas: Image.Image, logo_path, params: dict) -> Image.Image:
 # PBR & Masking Helpers
 # ---------------------------------------------------------------------------
 
-def _make_design_standalone(primary, secondary, accent, design, params) -> Image.Image:
-    """Renders a design onto a transparent background for layering."""
-    # We create a temporary opaque image using the existing _make_design 
-    # and then return it.
-    bg = Image.new("RGB", (SIZE, SIZE), primary)
-    return _make_design(primary, secondary, accent, design, params).convert("RGBA")
+def _make_logo_mask(logo_path, params: dict) -> "Image.Image | None":
+    """Greyscale mask for a logo layer (just its alpha footprint)."""
+    try:
+        logo = Image.open(logo_path).convert("RGBA")
+        scale = params.get("scale", 0.20)
+        target_w = int(SIZE * scale)
+        aspect = logo.height / logo.width
+        target_h = int(target_w * aspect)
+        logo = logo.resize((target_w, target_h), Image.LANCZOS)
+        mask = Image.new("L", (SIZE, SIZE), 0)
+        x_frac = params.get("x_frac", params.get("x", 50) / 100)
+        y_frac = params.get("y_frac", params.get("y", 50) / 100)
+        x = int(SIZE * x_frac) - target_w // 2
+        y = int(SIZE * y_frac) - target_h // 2
+        mask.paste(logo.split()[-1], (x, y))
+        return mask
+    except Exception:
+        return None
 
-def _make_layer_mask(l_type, l_id, l_params) -> Image.Image:
-    """Generates a greyscale mask representing the layer's coverage."""
-    mask = Image.new("L", (SIZE, SIZE), 0)
-    draw = ImageDraw.Draw(mask)
-    
-    if l_type == "design":
-        if l_id == "solid":
-            return Image.new("L", (SIZE, SIZE), 255)
-        # For complexity, we can use the secondary color as the mask indicator
-        # in a temporary render
-        temp = _make_design((0,0,0), (255,255,255), (255,255,255), l_id, l_params)
-        return temp.convert("L")
-        
-    elif l_type == "logo":
-        lp = l_params.get("path")
-        if lp and Path(lp).exists():
-            logo = Image.open(lp).convert("RGBA")
-            scale = l_params.get("scale", 0.20)
-            target_w = int(SIZE * scale)
-            aspect = logo.height / logo.width
-            target_h = int(target_w * aspect)
-            logo = logo.resize((target_w, target_h), Image.LANCZOS)
-            x = int(SIZE * l_params.get("x_frac", 0.5)) - target_w // 2
-            y = int(SIZE * l_params.get("y_frac", 0.5)) - target_h // 2
-            mask.paste(logo.split()[-1], (x, y)) # Use alpha channel as mask
-            return mask
-            
-    return None
+
+def _overlay_template_direct(canvas: Image.Image, template_path: Path, opacity: float) -> Image.Image:
+    """Fallback: composite the raw UV template at low opacity to show panel seams."""
+    tmpl = Image.open(template_path).convert("RGBA").resize((SIZE, SIZE))
+    # Darken the template and reduce its opacity so it shows as subtle seam lines
+    r, g, b, a = tmpl.split()
+    # Dim the alpha by opacity so it's a subtle overlay
+    a = a.point(lambda p: int(p * opacity * 0.6))
+    tmpl = Image.merge("RGBA", (r, g, b, a))
+    result = Image.alpha_composite(canvas.convert("RGBA"), tmpl)
+    return result.convert("RGB")
 
 def _apply_grunge(canvas: Image.Image, amount: float) -> Image.Image:
     """Adds procedural dirt and rubber marks."""
