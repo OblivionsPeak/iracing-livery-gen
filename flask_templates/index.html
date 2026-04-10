@@ -243,14 +243,25 @@
   .three-container { width: 100%; aspect-ratio: 1; cursor: grab; background: #000; border-radius: calc(var(--radius) * 1.5 - 2px); }
   .three-container:active { cursor: grabbing; }
 
-  /* Notification Toast */
-  .toast {
-    position: fixed; bottom: 24px; right: 24px; background: rgba(16, 185, 129, 0.9); backdrop-filter: blur(4px);
-    color: #fff; padding: 12px 24px; border-radius: var(--radius); font-weight: 600; font-size: 0.9rem;
-    box-shadow: 0 10px 25px rgba(0,0,0,0.3); transform: translateY(100px); opacity: 0; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    z-index: 1000;
-  }
   .toast.show { transform: translateY(0); opacity: 1; }
+
+  /* Pro Layer UI */
+  .layers-container { margin-top: 15px; }
+  .layer-card {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 10px;
+    transition: all 0.2s ease;
+  }
+  .layer-card:hover { border-color: rgba(255, 255, 255, 0.2); background: rgba(255, 255, 255, 0.06); }
+  .layer-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .layer-drag-handle { cursor: grab; color: var(--text-muted); font-family: monospace; }
+  .layer-delete { background: none; border: none; color: #ff5252; font-size: 1.2rem; cursor: pointer; padding: 0 5px; opacity: 0.7; }
+  .layer-delete:hover { opacity: 1; }
+  .pbr-row label { font-size: 10px; text-transform: uppercase; color: var(--text-sec); letter-spacing: 0.05em; }
+  .pbr-row .val { color: var(--accent); }
 </style>
 </head>
 <body x-data="liveryEditor()" x-init="init()" @keydown.window.ctrl.z.prevent="undo()" @keydown.window.ctrl.y.prevent="redo()">
@@ -349,98 +360,107 @@
   </div>
 
   <!-- DESIGN PATTERN -->
-  <div class="section-title">Design Layer</div>
+  <div class="section-title">Add Background Design</div>
   <div class="design-grid">
     <template x-for="d in designs" :key="d.id">
-      <div class="design-btn" :class="{ 'active': config.design === d.id }" @click="config.design = d.id; markChanged()">
+      <div class="design-btn" @click="addLayer('design', d.id)">
         <span x-html="d.svg"></span> <span x-text="d.name"></span>
       </div>
     </template>
   </div>
 
-  <div x-show="['diagonal_stripes','racing_stripes','two_tone'].includes(config.design)" x-cloak style="margin-top: 12px;">
-    <label>Angle <span class="val" x-text="config.angle + '°'"></span></label>
-    <div class="slider-row"><input type="range" min="10" max="80" x-model.number="config.angle" @input.debounce.300ms="markChanged()"></div>
-    <label>Stripe Width <span class="val" x-text="config.stripe_width"></span></label>
-    <div class="slider-row"><input type="range" min="40" max="400" x-model.number="config.stripe_width" @input.debounce.300ms="markChanged()"></div>
+  <!-- LAYERS PANEL -->
+  <div class="section-title" style="margin-top: 30px; display:flex; justify-content: space-between; align-items:center;">
+    <span>Layers Manager</span>
+    <span class="btn-sm" style="font-size: 10px; padding: 2px 6px; cursor:pointer;" @click="config.layers = [{type:'design',id:'solid',metallic:0.1,roughness:0.5,params:{}}]">Clear All</span>
   </div>
 
-  <div x-show="config.design === 'racing_stripes'" x-cloak style="margin-top: 12px;">
-    <label>Direction</label>
-    <select x-model="config.stripe_dir" @change="markChanged()">
-      <option value="vertical">Vertical</option>
-      <option value="horizontal">Horizontal</option>
-    </select>
+  <div class="layers-container" style="display:flex; flex-direction: column-reverse; gap:10px;">
+    <template x-for="(layer, index) in config.layers" :key="index">
+      <div class="layer-card">
+        <div class="layer-header">
+           <div style="display:flex; align-items:center; gap:8px;">
+             <span class="layer-drag-handle">::</span>
+             <strong x-text="layer.type === 'logo' ? (layer.params.filename || 'Logo') : layer.id.charAt(0).toUpperCase() + layer.id.slice(1)"></strong>
+           </div>
+           <button class="layer-delete" @click="removeLayer(index)">&times;</button>
+        </div>
+        
+        <!-- Shared PBR Controls -->
+        <div class="pbr-row" style="display:flex; gap:15px; margin-top:8px;">
+           <div style="flex:1">
+             <label style="font-size:10px; margin-bottom:4px;">Metallic <span class="val" x-text="Math.round(layer.metallic * 100) + '%'"></span></label>
+             <input type="range" min="0" max="1" step="0.05" x-model.number="layer.metallic" @input.debounce.300ms="markChanged()">
+           </div>
+           <div style="flex:1">
+             <label style="font-size:10px; margin-bottom:4px;">Roughness <span class="val" x-text="Math.round(layer.roughness * 100) + '%'"></span></label>
+             <input type="range" min="0" max="1" step="0.05" x-model.number="layer.roughness" @input.debounce.300ms="markChanged()">
+           </div>
+        </div>
+
+        <!-- Layer Specific Settings -->
+        <div style="margin-top: 10px; padding-top:10px; border-top: 1px solid rgba(255,255,255,0.05);">
+          <!-- Logo Settings -->
+          <template x-if="layer.type === 'logo'">
+             <div>
+               <div class="row" style="gap:10px;">
+                 <div style="flex:1">
+                   <label>Scale</label>
+                   <input type="range" min="5" max="100" x-model.number="layer.params.scale" @input.debounce.300ms="markChanged()">
+                 </div>
+                 <div style="flex:1">
+                   <label>Mirror</label>
+                   <select x-model="layer.mirror" @change="markChanged()">
+                     <option value="none">Off</option>
+                     <option value="horizontal">Horizontal</option>
+                   </select>
+                 </div>
+               </div>
+               <div class="row" style="margin-top:8px; gap:10px;">
+                 <div style="flex:1">
+                   <label>X-Pos</label>
+                   <input type="range" min="0" max="100" x-model.number="layer.params.x" @input.debounce.300ms="markChanged()">
+                 </div>
+                 <div style="flex:1">
+                   <label>Y-Pos</label>
+                   <input type="range" min="0" max="100" x-model.number="layer.params.y" @input.debounce.300ms="markChanged()">
+                 </div>
+               </div>
+             </div>
+          </template>
+
+          <!-- Design Settings -->
+          <template x-if="layer.type === 'design' && ['diagonal_stripes','racing_stripes','two_tone'].includes(layer.id)">
+             <div class="row" style="gap:10px;">
+                <div style="flex:1">
+                  <label>Angle</label>
+                  <input type="range" min="0" max="180" x-model.number="layer.params.angle" @input.debounce.300ms="markChanged()">
+                </div>
+                <div style="flex:1">
+                  <label>Stripe Width</label>
+                  <input type="range" min="40" max="400" x-model.number="layer.params.stripe_width" @input.debounce.300ms="markChanged()">
+                </div>
+             </div>
+          </template>
+        </div>
+      </div>
+    </template>
   </div>
 
-  <div x-show="['split','gradient'].includes(config.design)" x-cloak style="margin-top: 12px;">
-    <label>Split Position <span class="val" x-text="config.split + '%'"></span></label>
-    <div class="slider-row"><input type="range" min="20" max="80" x-model.number="config.split" @input.debounce.300ms="markChanged()"></div>
-    <label>Direction</label>
-    <select x-model="config.split_dir" @change="markChanged()">
-      <option value="horizontal">Horizontal</option>
-      <option value="vertical">Vertical</option>
-    </select>
+  <div class="row" style="margin-top: 30px;">
+     <button class="btn gold w-full" style="padding:15px; font-weight:700;" @click="exportiRacing()">Download iRacing TGAs (ZIP)</button>
   </div>
-
-  <div x-show="config.design === 'gradient_chevron'" x-cloak style="margin-top: 12px;">
-    <label>Edge Fade <span class="val" x-text="config.feather + 'px'"></span></label>
-    <div class="slider-row"><input type="range" min="0" max="200" x-model.number="config.feather" @input.debounce.300ms="markChanged()"></div>
-  </div>
-
-  <div x-show="['chevron','gradient_chevron'].includes(config.design)" x-cloak style="margin-top: 12px;">
-    <label>Chevron Angle <span class="val" x-text="config.depth + '%'"></span></label>
-    <div class="slider-row"><input type="range" min="5" max="70" x-model.number="config.depth" @input.debounce.300ms="markChanged()"></div>
-  </div>
-
-  <div x-show="['sweep','chevron','gradient_chevron','radial_gradient','number_panel'].includes(config.design)" x-cloak style="margin-top: 12px;">
-    <label>Horizontal Offset <span class="val" x-text="config.h_offset + '%'"></span></label>
-    <div class="slider-row"><input type="range" min="10" max="90" x-model.number="config.h_offset" @input.debounce.300ms="markChanged()"></div>
-    <label>Vertical Offset <span class="val" x-text="config.v_offset + '%'"></span></label>
-    <div class="slider-row"><input type="range" min="10" max="90" x-model.number="config.v_offset" @input.debounce.300ms="markChanged()"></div>
-  </div>
-
-  <!-- OVERLAY PATTERN -->
-  <div class="section-title">Overlay Mix</div>
-  <div class="row">
-    <div>
-      <label style="margin-top:0;">Secondary Pattern</label>
-      <select x-model="config.overlay_design" @change="markChanged()">
-        <option value="none">None</option>
-        <template x-for="d in designs" :key="d.id"><option :value="d.id" x-text="d.name"></option></template>
-      </select>
-    </div>
-    <div>
-      <label style="margin-top:0;">Mix Opacity <span class="val" x-text="config.overlay_opacity + '%'"></span></label>
-      <input type="range" min="0" max="90" style="margin-top:14px;" x-model.number="config.overlay_opacity" @input.debounce.300ms="markChanged()">
-    </div>
-  </div>
-
-  <!-- LOGO / SPONSOR -->
-  <div class="section-title">Logos & Decals</div>
+  
+  <div class="section-title" style="margin-top: 20px;">Add Decal</div>
   <div class="drop-zone" 
        @dragover.prevent="logoZoneActive = true" 
        @dragleave.prevent="logoZoneActive = false" 
        @drop.prevent="logoZoneActive = false; uploadLogo($event.dataTransfer.files[0])"
        :class="{ 'drag-over': logoZoneActive }">
-    <input type="file" accept=".png,.jpg,.jpeg,.webp" @change="uploadLogo($event.target.files[0])">
+    <input type="file" accept=".png,.jpg,.jpeg,.webp,.svg" @change="uploadLogo($event.target.files[0])">
     <div class="drop-label">
-        <span style="font-size: 0.85rem; font-weight: 600; color:var(--text-pri)">Drop to add a decal layer<br><span style="font-size: 0.75rem; color:var(--text-muted); font-weight:400;">(Requires transparent PNG)</span></span>
+      <span style="font-size: 0.85rem; font-weight: 600; color:var(--text-pri)">Drop to add a decal layer<br><span style="font-size: 0.75rem; color:var(--text-muted); font-weight:400;">(Supports PNG, JPG, and SVG)</span></span>
     </div>
-  </div>
-  
-  <div x-show="config.logos && config.logos.length > 0" x-cloak style="margin-top: 12px; display: flex; flex-direction: column; gap: 8px;">
-    <template x-for="(logo, idx) in config.logos" :key="idx">
-      <div style="background: var(--bg-surface-hover); padding: 12px; border-radius: var(--radius); border: 1px solid var(--border);">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 8px;">
-          <span style="font-size: 0.8rem; font-weight: 600;" x-text="'Layer ' + (idx+1)"></span>
-          <button class="btn-sm" style="flex:none; width: auto; padding: 4px 8px; border-color:#ef4444; color:#ef4444;" @click="removeLogo(idx)">Remove</button>
-        </div>
-        <label style="margin-top:0;">Scale <span class="val" x-text="logo.scale + '%'"></span></label>
-        <div class="slider-row"><input type="range" min="5" max="80" x-model.number="logo.scale" @input.debounce.300ms="markChanged()"></div>
-        <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 8px;">Drag and drop directly on the 2D Preview mapping below.</p>
-      </div>
-    </template>
   </div>
 
   <!-- FINISH -->
@@ -487,10 +507,10 @@
     <div class="preview-wrapper" x-show="viewMode === '2d'" x-ref="twoDWrapper" style="position: relative;">
       <img :src="'/preview/' + (previewClean || previewBaked) + '?t=' + timestamp" @error="if(previewClean) previewClean = null" alt="Livery" style="width: 100%; pointer-events: none; display: block;">
       
-      <template x-for="(logo, idx) in config.logos" :key="idx">
-         <img :src="logo.url" 
-              :style="`position: absolute; left: ${logo.x}%; top: ${logo.y}%; width: ${logo.scale * 2}%; transform: translate(-50%, -50%); cursor: grab; z-index: 10; opacity: ${logo.activeDrag ? '0.6' : '1'}; filter: drop-shadow(0 4px 8px rgba(0,0,0,0.5));`"
-              @mousedown.prevent="startDrag(idx, $event)"
+      <template x-for="(layer, idx) in config.layers.filter(l => l.type === 'logo')" :key="idx">
+         <img :src="'/static/logos/' + layer.id + '/' + layer.params.filename" 
+              :style="`position: absolute; left: ${layer.params.x}%; top: ${layer.params.y}%; width: ${layer.params.scale * 2}%; transform: translate(-50%, -50%); cursor: grab; z-index: 10; opacity: ${layer.activeDrag ? '0.6' : '1'}; filter: drop-shadow(0 4px 8px rgba(0,0,0,0.5));`"
+              @mousedown.prevent="startDrag(config.layers.indexOf(layer), $event)"
               alt="decal">
       </template>
     </div>
@@ -501,7 +521,7 @@
     <div class="result-footer">
       <span class="result-label" x-text="previewBaked"></span>
       <div style="display:flex;gap:6px;">
-        <button class="btn-export" @click="exportToIRacing()">Export to iRacing</button>
+        <button class="btn-export" @click="exportiRacing()">Export to iRacing</button>
         <a class="btn-dl" :href="'/download/' + previewBaked" :download="previewBaked">Download PNG</a>
       </div>
     </div>
@@ -540,7 +560,6 @@ document.addEventListener('alpine:init', () => {
   Alpine.data('liveryEditor', () => ({
     designs: DESIGNS,
     activeCar: null,
-    activeLogo: null,
     
     // UI State
     dropZoneActive: false,
@@ -568,26 +587,18 @@ document.addEventListener('alpine:init', () => {
     
     config: {
       carId: 'custom',
+      customerId: '0',
       carNumber: '42',
       primary: '#1a1a2e',
       secondary: '#e63946',
       accent: '#ffd700',
-      design: 'solid',
-      angle: 45,
-      stripe_width: 160,
-      split: 50,
-      stripe_dir: 'horizontal',
-      split_dir: 'horizontal',
       texture: 'none',
       texture_opacity: 25,
       template_opacity: 35,
-      overlay_design: 'none',
-      overlay_opacity: 40,
-      feather: 60,
-      depth: 35,
-      h_offset: 50,
-      v_offset: 50,
-      logos: []
+      grunge_amount: 0,
+      layers: [
+        { type: 'design', id: 'solid', metallic: 0.1, roughness: 0.5, params: {} }
+      ]
     },
 
     init() {
@@ -626,38 +637,98 @@ document.addEventListener('alpine:init', () => {
     },
 
     markChanged() {
+      // 1. Live Sync Mirroring Logic
+      this.config.layers.forEach((layer, idx) => {
+        if (layer.mirror && layer.mirror !== 'none' && !layer._isMirror) {
+          // Find or create mirrored sibling
+          let sibling = this.config.layers.find(l => l._parentIdx === idx);
+          if (!sibling) {
+            sibling = JSON.parse(JSON.stringify(layer));
+            sibling._parentIdx = idx;
+            sibling._isMirror = true;
+            this.config.layers.push(sibling);
+          }
+          // Sync common properties
+          sibling.metallic = layer.metallic;
+          sibling.roughness = layer.roughness;
+          sibling.opacity = layer.opacity || 1.0;
+          sibling.params.scale = layer.params.scale;
+          sibling.params.y = layer.params.y;
+          // Apply horizontal reflection
+          if (layer.mirror === 'horizontal') {
+              sibling.params.x = 100 - layer.params.x;
+          }
+        }
+      });
+
+      // Cleanup: Remove mirrors whose parents are gone
+      this.config.layers = this.config.layers.filter(l => {
+         if (!l._isMirror) return true;
+         const parent = this.config.layers[l._parentIdx];
+         return parent && !parent._isMirror && parent.mirror !== 'none';
+      });
+
+      this.saveConfig();
+      if (this.activeCar) this.triggerBuild(false);
+      
       if (!this.isUndoing) {
         if (this.historyIndex < this.history.length - 1) {
             this.history.splice(this.historyIndex + 1);
         }
-        if(this.history.length === 0 || JSON.stringify(this.config) !== JSON.stringify(this.history[this.historyIndex])) {
-            this.history.push(JSON.parse(JSON.stringify(this.config)));
-            if (this.history.length > 30) this.history.shift();
-            this.historyIndex = this.history.length - 1;
-        }
+        this.history.push(JSON.stringify(this.config));
+        if (this.history.length > 30) this.history.shift();
+        this.historyIndex = this.history.length - 1;
       }
-      
-      // Auto-save to LocalStorage
       localStorage.setItem('iRacingLiveryConfig', JSON.stringify(this.config));
-      console.log('Sending design:', this.config.design);
-      
-      // Update URL silently
-      const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(this.config))));
-      const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + '?c=' + encoded;
-      window.history.replaceState({path: newUrl}, '', newUrl);
+    },
 
-      // Trigger automatic rebuild
-      if (this.activeCar) this.triggerBuild(false);
+    saveConfig() {
+      localStorage.setItem('iRacingLiveryConfig', JSON.stringify(this.config));
+    },
+
+    async uploadLogo(file) {
+      if (!file) return;
+      const form = new FormData();
+      form.append('file', file);
+      try {
+        const r = await fetch('/upload-logo', { method: 'POST', body: form });
+        const d = await r.json();
+        if (d.error) throw new Error(d.error);
+        this.addLayer('logo', 'custom', { filename: d.filename, x: 50, y: 50, scale: 20 });
+        this.showToast('Logo uploaded.');
+      } catch(e) {
+        this.statusError = true;
+        this.statusMsg = 'Upload failed: ' + e.message;
+      }
+    },
+
+    removeLogo(index) {
+      this.removeLayer(index);
+    },
+
+    async exportiRacing() {
+      if (!this.previewBaked) return;
+      try {
+        const r = await fetch('/export-iracing', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ car_id: this.activeCar, config: this.config })
+        });
+        const blob = await r.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `livery_${this.activeCar}.zip`;
+        a.click();
+      } catch(e) {
+        this.showToast('Export failed.');
+      }
     },
 
     resetConfig() {
       if(!confirm("Reset current design to solid and clear all overlays?")) return;
-      this.config.design = 'solid';
-      this.config.overlay_design = 'none';
-      this.config.texture = 'none';
-      this.config.overlay_opacity = 0;
-      this.config.template_opacity = 35;
-      this.history = []; // Complete flush
+      this.config.layers = [{type:'design',id:'solid',metallic:0.1,roughness:0.5,params:{}}];
+      this.history = [];
       this.historyIndex = -1;
       this.markChanged();
       this.showToast("✓ Clean Slate: Design Reset.");
@@ -684,8 +755,8 @@ document.addEventListener('alpine:init', () => {
     
     startDrag(idx, e) {
       if(this.viewMode !== '2d') return;
-      const logo = this.config.logos[idx];
-      logo.activeDrag = true;
+      const layer = this.config.layers[idx];
+      layer.activeDrag = true;
       const wrapper = this.$refs.twoDWrapper;
       const onMouseMove = (ev) => {
           const rect = wrapper.getBoundingClientRect();
@@ -693,11 +764,11 @@ document.addEventListener('alpine:init', () => {
           let yFrac = (ev.clientY - rect.top) / rect.height * 100;
           xFrac = Math.max(0, Math.min(100, xFrac));
           yFrac = Math.max(0, Math.min(100, yFrac));
-          logo.x = Math.round(xFrac);
-          logo.y = Math.round(yFrac);
+          layer.params.x = Math.round(xFrac);
+          layer.params.y = Math.round(yFrac);
       };
       const onMouseUp = () => {
-          logo.activeDrag = false;
+          layer.activeDrag = false;
           window.removeEventListener('mousemove', onMouseMove);
           window.removeEventListener('mouseup', onMouseUp);
           this.markChanged();
@@ -735,7 +806,7 @@ document.addEventListener('alpine:init', () => {
       const hsvToHex = (hh, ss, vv) => {
         const c = vv * ss, x = c * (1 - Math.abs((hh/60) % 2 - 1)), m = vv - c;
         let rr=0, gg=0, bb=0;
-        if (hh<60) { rr=c; gg=x; } else if (hh<120) { rr=x; gg=c; } else if (hh<180) { gg=c; bb=x; } else if (hh<240) { gg=x; bb=c; } else if (hh<300) { rr=x; bb=c; } else { rr=c; bb=x; }
+        if (hh<60) { rr=c; gg=x; } else if (hh<120) { rr=x; gg=c; } else if (hh<180) { gg=c; bb=x; } else if (hh<240) { rr=x; gg=c; } else if (hh<300) { rr=x; bb=c; } else { rr=c; bb=x; }
         return '#' + [rr+m, gg+m, bb+m].map(vl => Math.round(vl*255).toString(16).padStart(2,'0')).join('');
       };
       this.config.secondary = hsvToHex((h + 150) % 360, Math.min(s * 1.1, 1), Math.max(v * 0.9, 0.2));
@@ -769,29 +840,41 @@ document.addEventListener('alpine:init', () => {
       reader.readAsText(file);
     },
 
+    addLayer(type, id, params = {}) {
+      const layer = {
+        type: type,
+        id: id,
+        metallic: 0,
+        roughness: 0.2,
+        mirror: 'none',
+        params: {
+          scale: 20,
+          x: 50,
+          y: 50,
+          ...params
+        }
+      };
+      this.config.layers.push(layer);
+      this.markChanged();
+    },
+
+    removeLayer(index) {
+      this.config.layers.splice(index, 1);
+      this.markChanged();
+    },
+
     getPayload() {
       return {
         car_id: this.activeCar || (this.config.carId !== 'custom' ? this.config.carId : 'custom'),
+        customer_id: this.config.customerId,
         primary: this.config.primary,
         secondary: this.config.secondary,
         accent: this.config.accent,
-        design: this.config.design,
-        angle: this.config.angle,
-        stripe_width: this.config.stripe_width,
-        split: this.config.split / 100,
-        direction: this.config.design === 'racing_stripes' ? this.config.stripe_dir : this.config.split_dir,
         texture: this.config.texture,
         texture_opacity: this.config.texture_opacity / 100,
         template_opacity: this.config.template_opacity / 100,
-        overlay_design: this.config.overlay_design,
-        overlay_opacity: this.config.overlay_opacity / 100,
-        feather: this.config.feather,
-        depth: this.config.depth / 100,
-        h_offset: (this.config.h_offset - 50) / 100,
-        v_offset: (this.config.v_offset - 50) / 100,
-        cx_frac: this.config.h_offset / 100,
-        cy_frac: this.config.v_offset / 100,
-        logos: this.config.logos || []
+        grunge_amount: this.config.grunge_amount / 100,
+        layers: this.config.layers
       };
     },
 
@@ -808,7 +891,6 @@ document.addEventListener('alpine:init', () => {
         this.statusError = false;
         this.previewClean = d.image_clean;
         this.previewBaked = d.image_baked;
-        // High-entropy cache buster
         this.timestamp = Date.now() + "_" + Math.floor(Math.random() * 100000);
         if (this.viewMode === '3d') {
             this.updateThreeTexture();
@@ -852,39 +934,41 @@ document.addEventListener('alpine:init', () => {
         const r = await fetch('/upload-logo', { method: 'POST', body: form });
         const d = await r.json();
         if (d.error) throw new Error(d.error);
-        this.config.logos = this.config.logos || [];
-        this.config.logos.push({
-            filename: d.filename,
-            url: '/static/logos/' + d.logo_id + '/' + d.filename,
-            x: 50,
-            y: 50,
-            scale: 20,
-            activeDrag: false
+        
+        // Add as a new layer automatically
+        this.addLayer('logo', d.logo_id, {
+          filename: d.filename,
+          scale: 25,
+          x: 50,
+          y: 50
         });
-        this.showToast('Decal added to livery');
-        this.markChanged();
+        this.showToast('✓ Decal layer added: ' + d.filename);
       } catch(e) {
-        this.statusError = true;
-        this.statusMsg = 'Logo Error: ' + e.message;
+        alert('Upload failed: ' + e.message);
       }
     },
 
     removeLogo(idx) {
-      this.config.logos.splice(idx, 1);
+      this.config.layers.splice(idx, 1);
       this.markChanged();
     },
 
-    async exportToIRacing() {
+    async exportiRacing() {
       this.isBuilding = true;
       try {
-        const r = await fetch('/export-to-iracing', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ filename: this.previewBaked, car_id: this.activeCar, car_number: this.config.carNumber || '0' }),
+        const r = await fetch('/export-tga', { 
+           method: 'POST', 
+           headers: {'Content-Type':'application/json'},
+           body: JSON.stringify(this.getPayload()) 
         });
-        const d = await r.json();
-        if (d.error) throw new Error(d.error);
-        this.showToast(`✓ Exported to iRacing Directory`);
+        if (!r.ok) throw new Error('Export failed. Make sure you have rendered at least once.');
+        const blob = await r.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `iracing_livery_${this.config.customerId || '42'}.zip`;
+        a.click();
+        this.showToast('✓ iRacing TGAs ready (ZIP)');
       } catch(e) {
         this.statusError = true;
         this.statusMsg = 'Export failed: ' + e.message;
@@ -972,17 +1056,28 @@ document.addEventListener('alpine:init', () => {
     },
 
     updateThreeTexture() {
-        if(!this.threeMaterial || !this.previewBaked) return;
-        const loader = new THREE.TextureLoader();
-        const url = '/preview/' + this.previewBaked + '?t=' + this.timestamp;
-        
-        loader.load(url, (texture) => {
-            texture.colorSpace = THREE.SRGBColorSpace || THREE.sRGBEncoding;
-            // The template is likely a standard square map, invert Y if needed
-            texture.flipY = true; 
-            this.threeMaterial.map = texture;
-            this.threeMaterial.needsUpdate = true;
-        });
+      if (!this.threeMaterial) return;
+      const loader = new THREE.TextureLoader();
+      
+      // 1. Load Visual Livery
+      loader.load('/preview/' + this.previewBaked + '?t=' + this.timestamp, (tex) => {
+        tex.flipY = false;
+        tex.colorSpace = THREE.SRGBColorSpace;
+        this.threeMaterial.map = tex;
+        this.threeMaterial.needsUpdate = true;
+      });
+
+      // 2. Load Spec Map (PBR)
+      const specFile = this.previewBaked.replace('_baked.png', '_spec.png');
+      loader.load('/preview/' + specFile + '?t=' + this.timestamp, (tex) => {
+        tex.flipY = false;
+        // In our Spec Map: Red = Metallic, Green = Roughness
+        this.threeMaterial.metalnessMap = tex;
+        this.threeMaterial.roughnessMap = tex;
+        this.threeMaterial.metalness = 1.0; // Use map values
+        this.threeMaterial.roughness = 1.0; // Use map values
+        this.threeMaterial.needsUpdate = true;
+      });
     },
     
     updateThreeMaterialProps() {

@@ -202,75 +202,51 @@ def build_livery():
     feather          = int(_clamp(data.get("feather", 60), 0, 300, 60))
     texture_opacity  = _clamp(data.get("texture_opacity", 0.25), 0.0, 1.0, 0.25)
     template_opacity = _clamp(data.get("template_opacity", 0.35), 0.0, 1.0, 0.35)
-    overlay_opacity  = _clamp(data.get("overlay_opacity", 0.4), 0.0, 1.0, 0.4)
-    h_offset         = _clamp(data.get("h_offset", 0.0), -0.4, 0.4, 0.0)
-    v_offset         = _clamp(data.get("v_offset", 0.0), -0.4, 0.4, 0.0)
-    cx_frac          = _clamp(data.get("cx_frac",  0.5),  0.1, 0.9, 0.5)
-    cy_frac          = _clamp(data.get("cy_frac",  0.5),  0.1, 0.9, 0.5)
-
-    # Process Multi-Logos Array
-    logos_data = data.get("logos", [])
-    logo_params = []
-    for l in logos_data:
-        lp = LOGOS_DIR / car_id / l.get("filename", "")
-        if lp.exists() and l.get("filename"):
-            logo_params.append({
-                "path": str(lp),
-                "scale": _clamp(l.get("scale", 20), 5, 100, 20) / 100,
-                "x_frac": _clamp(l.get("x", 50), 0, 100, 50) / 100,
-                "y_frac": _clamp(l.get("y", 50), 0, 100, 50) / 100,
-            })
+    
+    # Process Unified Layers Array
+    raw_layers = data.get("layers", [])
+    processed_layers = []
+    
+    for l in raw_layers:
+        l_type = l.get("type", "design")
+        l_params = l.get("params", {})
+        
+        if l_type == "logo":
+            # Map logo filename to full path for the builder
+            fname = l_params.get("filename", "")
+            lp = LOGOS_DIR / car_id / fname
+            if lp.exists():
+                l_params["path"] = str(lp)
+        
+        processed_layers.append({
+            "type": l_type,
+            "id": l.get("id"),
+            "params": l_params,
+            "metallic": l.get("metallic", 0.0),
+            "roughness": l.get("roughness", 0.1),
+            "opacity": l.get("opacity", 1.0)
+        })
 
     try:
-        img_clean, img_baked = build(
+        img_clean, img_baked, spec_map = build(
             template_path    = tmpl,
             primary          = hex_to_rgb(data.get("primary",   "#1a1a2e")),
             secondary        = hex_to_rgb(data.get("secondary", "#e63946")),
             accent           = hex_to_rgb(data.get("accent",    "#ffd700")),
-            design           = str(data.get("design", "solid")).lower().strip(),
-            design_params    = {
-                "angle":        angle,
-                "stripe_width": stripe_width,
-                "gap":          gap,
-                "split":        split,
-                "depth":        depth,
-                "feather":      feather,
-                "h_offset":     h_offset,
-                "v_offset":     v_offset,
-                "cx_frac":      cx_frac,
-                "cy_frac":      cy_frac,
-                "direction":    data.get("direction", "horizontal"),
-            },
+            layers           = processed_layers,
             texture          = str(data.get("texture", "none")).lower().strip(),
             texture_opacity  = texture_opacity,
             template_opacity = template_opacity,
-            overlay_design   = str(data.get("overlay_design", "none")).lower().strip(),
-            overlay_opacity  = overlay_opacity,
-            logo_params      = logo_params,
+            grunge_amount    = _clamp(data.get("grunge_amount", 0.0), 0.0, 1.0, 0.0)
         )
     except Exception as e:
+        import traceback
+        log_debug(f"BUILD ERROR: {traceback.format_exc()}")
         return jsonify({"error": str(e)}), 500
 
     base_name = f"{car_id}_{int(time.time() * 1000)}"
     file_clean = f"{base_name}_clean.png"
     file_baked = f"{base_name}_baked.png"
-    
-    io_clean, io_baked = io.BytesIO(), io.BytesIO()
-    img_clean.save(io_clean, 'PNG')
-    img_baked.save(io_baked, 'PNG')
-    
-    PREVIEW_CACHE[file_clean] = io_clean.getvalue()
-    PREVIEW_CACHE[file_baked] = io_baked.getvalue()
-    
-    if len(PREVIEW_CACHE) > MAX_CACHE_SIZE:
-        PREVIEW_CACHE.popitem(last=False)
-        PREVIEW_CACHE.popitem(last=False)
-        
-    return jsonify({"status": "ok", "image_clean": file_clean, "image_baked": file_baked})
-
-
-# ---------------------------------------------------------------------------
-# Preview + download from RAM
 # ---------------------------------------------------------------------------
 
 @app.route("/preview/<filename>")

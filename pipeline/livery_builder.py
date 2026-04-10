@@ -12,11 +12,22 @@ No AI involved — fast, deterministic, reliable.
 
 import math
 from pathlib import Path
+import io
 
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter
 
+# Vector support
+from svglib.svglib import svg2rlg
+from reportlab.graphics import renderPM
+
 SIZE = 2048
+
+def _get_noise(size, scale=100.0):
+    """Simple procedural noise using numpy for grunge effects."""
+    from numpy.random import default_rng
+    rng = default_rng()
+    return rng.standard_normal((size, size))
 
 
 # ---------------------------------------------------------------------------
@@ -28,60 +39,69 @@ def build(
     primary: tuple,        # (R, G, B)
     secondary: tuple,
     accent: tuple,
-    design: str = "solid",
-    design_params: dict | None = None,
+    layers: "list | None" = None,
     texture: str = "none",
     texture_opacity: float = 0.25,
     template_opacity: float = 0.35,
-    overlay_design: str = "none",
-    overlay_opacity: float = 0.4,
-    logo_params: "list | None" = None,
-) -> Image.Image:
+    grunge_amount: float = 0.0,
+) -> tuple:
     """
-    Build a livery image.
+    Build a livery image and its corresponding spec map.
+    Returns (clean_livery, baked_livery, spec_map)
     """
-    dp = design_params or {}
+    # 1. Initialize main (RGB) and spec (PBR) canvases
+    # Spec Map Channel Map: Red=Metallic, Green=Roughness, Blue=Clearcoat
+    main_canvas = Image.new("RGB", (SIZE, SIZE), primary)
+    # Default spec: metallic=20 (base car paint), roughness=20 (gloss)
+    spec_canvas = Image.new("RGB", (SIZE, SIZE), (20, 20, 0))
+    
+    layer_list = layers or []
+    
+    # Process layers in sequence (bottom to top)
+    for layer in layer_list:
+        l_type = layer.get("type", "design")
+        l_id   = layer.get("id", "solid")
+        l_params = layer.get("params", {})
+        l_metallic = int(layer.get("metallic", 0) * 255)
+        l_roughness = int(layer.get("roughness", 0.1) * 255)
+        l_opacity = layer.get("opacity", 1.0)
+        
+        # A. Render the visual contribution
+        if l_type == "design":
+            layer_img = _make_design_standalone(primary, secondary, accent, l_id, l_params)
+            # Use alpha blending if the design isn't solid
+            main_canvas.paste(layer_img, (0,0))
+        elif l_type == "logo":
+            lp = l_params.get("path")
+            if lp and Path(lp).exists():
+                main_canvas = _overlay_logo(main_canvas, lp, l_params)
 
-    # 1. Design layer
-    canvas = _make_design(primary, secondary, accent, design, dp)
+        # B. Render the PBR contribution to Spec Map
+        # Create a mask for this layer to apply metallic/roughness
+        mask = _make_layer_mask(l_type, l_id, l_params)
+        if mask:
+            pbr_fill = Image.new("RGB", (SIZE, SIZE), (l_metallic, l_roughness, 0))
+            spec_canvas.paste(pbr_fill, (0,0), mask=mask)
 
-    # 2. Optional pattern overlay — blend a second fully-rendered design over the base
-    ov_name = (overlay_design or "none").lower().strip()
-    if ov_name not in ["none", "null", "", "solid"]:
-        # Defensive check: only render a real pattern as an overlay
-        ov_rgb   = _make_design(primary, secondary, accent, ov_name, dp)
-        base_arr = np.array(canvas, dtype=float)
-        ov_arr   = np.array(ov_rgb, dtype=float)
-        blended  = base_arr * (1.0 - overlay_opacity) + ov_arr * overlay_opacity
-        canvas   = Image.fromarray(np.clip(blended, 0, 255).astype(np.uint8))
-
-    # 3. Texture overlay
+    # 2. Texture overlay (surface patterns)
     if texture != "none":
         from pipeline.textures import generate_texture
         tex = generate_texture(texture, SIZE)
-        canvas = _blend_texture(canvas, tex, texture_opacity)
+        main_canvas = _blend_texture(main_canvas, tex, texture_opacity)
 
-    # Capture clean version (No decals)
-    # This is what's shown in the 2D editor background
-    canvas_clean = canvas.copy()
+    # 3. Grunge overlay (weathering)
+    if grunge_amount > 0:
+        main_canvas = _apply_grunge(main_canvas, grunge_amount)
 
-    # 4. Template overlay (shows panel seam lines)
-    tmpl_name = (str(template_path.parent.name))
+    # 4. UV Template (Panel Seams)
+    canvas_clean = main_canvas.copy()
     if template_opacity > 0:
         edge_mask_path = template_path.parent / "edge_mask.png"
         if edge_mask_path.exists():
-            canvas = _overlay_edge_mask(canvas, edge_mask_path, template_opacity)
+            main_canvas = _overlay_edge_mask(main_canvas, edge_mask_path, template_opacity)
 
-    canvas_clean = canvas.copy()
-
-    # 5. Optional logo/sponsor overlay array
-    if logo_params and len(logo_params) > 0:
-        for logo_obj in logo_params:
-            lp = logo_obj.get("path")
-            if lp and Path(lp).exists():
-                canvas = _overlay_logo(canvas, lp, logo_obj)
-
-    return canvas_clean, canvas
+    # Return clean/baked visual and the one spec map
+    return canvas_clean, main_canvas, spec_canvas
 
 
 def hex_to_rgb(hex_color: str) -> tuple:
@@ -424,23 +444,101 @@ def _overlay_edge_mask(canvas: Image.Image, edge_mask_path: Path, opacity: float
     return result.convert("RGB")
 
 
-# ---------------------------------------------------------------------------
-# Logo / sponsor overlay
-# ---------------------------------------------------------------------------
-
 def _overlay_logo(canvas: Image.Image, logo_path, params: dict) -> Image.Image:
-    """Composite a logo PNG (with alpha) onto the canvas at a given position/scale."""
-    logo = Image.open(logo_path).convert("RGBA")
-    scale = params.get("scale", 0.20)       # fraction of canvas width
+    """Composite a logo (PNG/JPG/SVG) onto the canvas."""
+    p = Path(logo_path)
+    logo = None
+    
+    scale = params.get("scale", 0.20)
     target_w = int(SIZE * scale)
-    aspect = logo.height / logo.width
-    target_h = int(target_w * aspect)
-    logo = logo.resize((target_w, target_h), Image.LANCZOS)
+    
+    if p.suffix.lower() == ".svg":
+        # Handle SVG via svglib -> reportlab -> PIL
+        drawing = svg2rlg(str(p))
+        # Scale the drawing to the target width
+        s_factor = target_w / drawing.width
+        drawing.width *= s_factor
+        drawing.height *= s_factor
+        drawing.scale(s_factor, s_factor)
+        
+        # Render to buffer
+        buf = io.BytesIO()
+        renderPM.drawToFile(drawing, buf, fmt="PNG")
+        buf.seek(0)
+        logo = Image.open(buf).convert("RGBA")
+    else:
+        # Standard raster logo
+        logo = Image.open(logo_path).convert("RGBA")
+        aspect = logo.height / logo.width
+        target_h = int(target_w * aspect)
+        logo = logo.resize((target_w, target_h), Image.LANCZOS)
+
     # x_frac, y_frac are the CENTER of the logo on the canvas
     x_frac = params.get("x_frac", 0.5)
     y_frac = params.get("y_frac", 0.5)
-    x = int(SIZE * x_frac) - target_w // 2
-    y = int(SIZE * y_frac) - target_h // 2
+    x = int(SIZE * x_frac) - logo.width // 2
+    y = int(SIZE * y_frac) - logo.height // 2
+    
     canvas_rgba = canvas.convert("RGBA")
     canvas_rgba.paste(logo, (x, y), mask=logo)
+    return canvas_rgba.convert("RGB")
+
+
+# ---------------------------------------------------------------------------
+# PBR & Masking Helpers
+# ---------------------------------------------------------------------------
+
+def _make_design_standalone(primary, secondary, accent, design, params) -> Image.Image:
+    """Renders a design onto a transparent background for layering."""
+    # We create a temporary opaque image using the existing _make_design 
+    # and then return it.
+    bg = Image.new("RGB", (SIZE, SIZE), primary)
+    return _make_design(primary, secondary, accent, design, params).convert("RGBA")
+
+def _make_layer_mask(l_type, l_id, l_params) -> Image.Image:
+    """Generates a greyscale mask representing the layer's coverage."""
+    mask = Image.new("L", (SIZE, SIZE), 0)
+    draw = ImageDraw.Draw(mask)
+    
+    if l_type == "design":
+        if l_id == "solid":
+            return Image.new("L", (SIZE, SIZE), 255)
+        # For complexity, we can use the secondary color as the mask indicator
+        # in a temporary render
+        temp = _make_design((0,0,0), (255,255,255), (255,255,255), l_id, l_params)
+        return temp.convert("L")
+        
+    elif l_type == "logo":
+        lp = l_params.get("path")
+        if lp and Path(lp).exists():
+            logo = Image.open(lp).convert("RGBA")
+            scale = l_params.get("scale", 0.20)
+            target_w = int(SIZE * scale)
+            aspect = logo.height / logo.width
+            target_h = int(target_w * aspect)
+            logo = logo.resize((target_w, target_h), Image.LANCZOS)
+            x = int(SIZE * l_params.get("x_frac", 0.5)) - target_w // 2
+            y = int(SIZE * l_params.get("y_frac", 0.5)) - target_h // 2
+            mask.paste(logo.split()[-1], (x, y)) # Use alpha channel as mask
+            return mask
+            
+    return None
+
+def _apply_grunge(canvas: Image.Image, amount: float) -> Image.Image:
+    """Adds procedural dirt and rubber marks."""
+    if amount <= 0: return canvas
+    noise = _get_noise(SIZE)
+    # Normalize noise to 0-255
+    noise = ((noise - noise.min()) / (noise.max() - noise.min()) * 255).astype(np.uint8)
+    noise_img = Image.fromarray(noise).convert("L")
+    noise_img = noise_img.filter(ImageFilter.GaussianBlur(radius=2))
+    
+    # Dirt color (dark brown/grey)
+    dirt = Image.new("RGB", (SIZE, SIZE), (25, 20, 15))
+    mask = noise_img.point(lambda p: p if p > 200 else 0) # Only high noise areas
+    # Scale mask by user amount (0.0 to 1.0)
+    mask = mask.point(lambda p: int(p * amount))
+    
+    canvas_rgba = canvas.convert("RGBA")
+    canvas_rgba.paste(dirt, (0,0), mask=mask)
     return canvas_rgba.convert("RGB")
