@@ -302,6 +302,24 @@ def _make_design(primary, secondary, accent, design, params, size=DEFAULT_SIZE) 
     elif design == "tearing":
         _draw_tearing(img, primary, secondary, accent, params, size=S)
 
+    elif design == "digital_camo":
+        _draw_digital_camo(img, primary, secondary, accent, params, size=S)
+
+    elif design == "speed_blur":
+        _draw_speed_blur(img, primary, secondary, accent, params, size=S)
+
+    elif design == "topographic":
+        _draw_topographic(img, primary, secondary, accent, params, size=S)
+
+    elif design == "circuit":
+        _draw_circuit(img, primary, secondary, accent, params, size=S)
+
+    elif design == "splatter":
+        _draw_splatter(img, primary, secondary, accent, params, size=S)
+
+    elif design == "sunburst":
+        _draw_sunburst(img, primary, secondary, accent, params, size=S)
+
     return img
 
 
@@ -425,6 +443,155 @@ def _draw_tearing(img, primary, secondary, accent, params, size=DEFAULT_SIZE):
     arr = np.array(img)
     arr[crack] = np.array(accent, dtype=np.uint8)
     img.paste(Image.fromarray(arr), (0, 0))
+
+def _draw_digital_camo(img, primary, secondary, accent, params, size=DEFAULT_SIZE):
+    """Military/Drift style block camo."""
+    S = size
+    grid_size = int(params.get("tile_size", 64) * S / DEFAULT_SIZE)
+    roughness = params.get("roughness", 0.4)
+    
+    cols, rows = S // grid_size + 1, S // grid_size + 1
+    rng = np.random.default_rng(13)
+    # 0=primary, 1=secondary, 2=accent
+    choices = rng.choice([0, 1, 2], size=(rows, cols), p=[1.0-roughness, roughness*0.7, roughness*0.3])
+    
+    # Upscale to full canvas
+    full_mask = choices.repeat(grid_size, axis=0).repeat(grid_size, axis=1)[:S, :S]
+    
+    res = np.zeros((S, S, 3), dtype=np.uint8)
+    res[full_mask == 0] = primary
+    res[full_mask == 1] = secondary
+    res[full_mask == 2] = accent
+    img.paste(Image.fromarray(res), (0,0))
+
+def _draw_speed_blur(img, primary, secondary, accent, params, size=DEFAULT_SIZE):
+    """Anisotropic noise stretching for a high-speed motion effect."""
+    S = size
+    angle = math.radians(params.get("angle", 0))
+    roughness = params.get("roughness", 0.5)
+    
+    y, x = np.mgrid[0:S, 0:S]
+    u = (x - S/2) * math.cos(angle) + (y - S/2) * math.sin(angle)
+    # We only care about the axis perpendicular to flight for the noise seed
+    v = -(x - S/2) * math.sin(angle) + (y - S/2) * math.cos(angle)
+    
+    rng = np.random.default_rng(99)
+    # Generate 1D noise for the cross-section
+    seed = rng.standard_normal(S // 4).astype(np.float32)
+    noise_1d = Image.fromarray(((seed + 3)/6 * 255).astype(np.uint8), "L").resize((1, S), Image.BICUBIC)
+    noise_arr = np.array(noise_1d).astype(np.float32) / 255.0
+    
+    # Broadcast across the U axis
+    mask = np.tile(noise_arr, (1, S))
+    # Distortion
+    res_mask = mask > (1.0 - roughness)
+    
+    res = np.zeros((S, S, 3), dtype=np.uint8)
+    res[:] = primary
+    res[res_mask] = secondary
+    
+    # Thin accent highlight lines
+    edges = np.diff(res_mask.astype(np.int8), axis=0, append=0) != 0
+    res[edges] = accent
+    img.paste(Image.fromarray(res), (0,0))
+
+def _draw_topographic(img, primary, secondary, accent, params, size=DEFAULT_SIZE):
+    """Contour lines based on thresholded multi-octave noise."""
+    S = size
+    freq = params.get("frequency", 4.0)
+    roughness = params.get("roughness", 0.3)
+    
+    rng = np.random.default_rng(55)
+    # Octave 1: Large features
+    n1 = rng.standard_normal((S//16, S//16)).astype(np.float32)
+    n1_img = Image.fromarray(((n1 + 3)/6 * 255).astype(np.uint8), "L").resize((S, S), Image.BICUBIC)
+    # Octave 2: Small features
+    n2 = rng.standard_normal((S//4, S//4)).astype(np.float32)
+    n2_img = Image.fromarray(((n2 + 3)/6 * 255).astype(np.uint8), "L").resize((S, S), Image.BILINEAR)
+    
+    noise = (np.array(n1_img).astype(np.float32)/255.0 * 0.7 + np.array(n2_img).astype(np.float32)/255.0 * 0.3)
+    
+    # Contours: where noise % interval is small
+    interval = 1.0 / max(1, freq)
+    is_line = (noise % interval) < (0.02 * roughness)
+    is_sec  = (noise % (interval * 4)) < (interval * 2) # Large bands
+    
+    res = np.zeros((S, S, 3), dtype=np.uint8)
+    res[:] = primary
+    res[is_sec] = secondary
+    res[is_line] = accent
+    img.paste(Image.fromarray(res), (0,0))
+
+def _draw_circuit(img, primary, secondary, accent, params, size=DEFAULT_SIZE):
+    """Futuristic tech vibes with Manhattan paths and nodes."""
+    S = size
+    grid = int(params.get("tile_size", 128) * S / DEFAULT_SIZE)
+    roughness = params.get("roughness", 0.5)
+    
+    draw = ImageDraw.Draw(img)
+    rng = np.random.default_rng(77)
+    
+    for x in range(0, S, grid):
+        for y in range(0, S, grid):
+            if rng.random() > roughness: continue
+            # Draw a path
+            path_type = rng.choice(["L", "T", "45"])
+            if path_type == "L":
+                draw.line([(x, y), (x+grid, y), (x+grid, y+grid)], fill=secondary, width=4)
+            elif path_type == "T":
+                draw.line([(x, y+grid//2), (x+grid, y+grid//2)], fill=secondary, width=4)
+                draw.line([(x+grid//2, y), (x+grid//2, y+grid)], fill=secondary, width=4)
+            else:
+                draw.line([(x, y), (x+grid, y+grid)], fill=secondary, width=4)
+            
+            # Draw nodes (dots) at corners
+            if rng.random() > 0.5:
+                rad = 6
+                draw.ellipse([x-rad, y-rad, x+rad, y+rad], fill=accent)
+
+def _draw_splatter(img, primary, secondary, accent, params, size=DEFAULT_SIZE):
+    """Messy, organic ink splashes."""
+    S = size
+    roughness = params.get("roughness", 0.5)
+    
+    rng = np.random.default_rng(88)
+    noise = rng.standard_normal((S//2, S//2)).astype(np.float32)
+    noise_img = Image.fromarray(((noise + 3)/6 * 255).astype(np.uint8), "L").resize((S, S), Image.BICUBIC)
+    noise_img = noise_img.filter(ImageFilter.GaussianBlur(radius=max(1, int(15 * S / DEFAULT_SIZE))))
+    
+    arr = np.array(noise_img).astype(np.float32) / 255.0
+    # Create distinct blobs via high-contrast thresholding
+    is_sec = arr > (1.1 - roughness)
+    is_acc = (arr > (1.08 - roughness)) & (~is_sec)
+    
+    res = np.zeros((S, S, 3), dtype=np.uint8)
+    res[:] = primary
+    res[is_sec] = secondary
+    res[is_acc] = accent
+    img.paste(Image.fromarray(res), (0,0))
+
+def _draw_sunburst(img, primary, secondary, accent, params, size=DEFAULT_SIZE):
+    """Radial rays originating from a focal point."""
+    S = size
+    cx = int(params.get("cx_frac", 0.5) * S)
+    cy = int(params.get("cy_frac", 0.5) * S)
+    count = int(params.get("count", 12))
+    
+    y, x = np.mgrid[0:S, 0:S]
+    angle = np.arctan2(y - cy, x - cx)
+    
+    # Use Sine to create rays
+    wave = np.sin(angle * count)
+    is_sec = wave > 0
+    
+    res = np.zeros((S, S, 3), dtype=np.uint8)
+    res[:] = primary
+    res[is_sec] = secondary
+    
+    # Accent lines on ray edges
+    edges = np.diff(is_sec.astype(np.int8), axis=1, append=0) != 0
+    res[edges] = accent
+    img.paste(Image.fromarray(res), (0,0))
 
 
 def _draw_diagonal_stripes(draw, color, angle_deg, stripe_width, offset_fraction=0.0, size=DEFAULT_SIZE):
