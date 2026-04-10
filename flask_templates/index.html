@@ -253,10 +253,14 @@
   .toast.show { transform: translateY(0); opacity: 1; }
 </style>
 </head>
-<body x-data="liveryEditor()" x-init="init()">
+<body x-data="liveryEditor()" x-init="init()" @keydown.window.ctrl.z.prevent="undo()" @keydown.window.ctrl.y.prevent="redo()">
 <div class="header">
   <h1>iRacing Livery Generator</h1>
   <p class="subtitle">Programmatic livery builder — no GPU required. Upload your car template, pick colors, view in 3D, and download.</p>
+  <div style="display:flex; gap: 8px; margin-top: 12px;" x-cloak>
+    <button class="btn-sm" @click="undo()" :disabled="historyIndex <= 0" :style="historyIndex <= 0 ? 'opacity: 0.5' : ''" style="width:auto;flex:none;padding:6px 12px; font-size:0.75rem;">↶ Undo (Ctrl+Z)</button>
+    <button class="btn-sm" @click="redo()" :disabled="historyIndex >= history.length - 1" :style="historyIndex >= history.length - 1 ? 'opacity: 0.5' : ''" style="width:auto;flex:none;padding:6px 12px; font-size:0.75rem;">↷ Redo (Ctrl+Y)</button>
+  </div>
 </div>
 
 <div class="toast" :class="{'show': toastMsg !== ''}" x-text="toastMsg"></div>
@@ -412,31 +416,30 @@
   </div>
 
   <!-- LOGO / SPONSOR -->
-  <div class="section-title">Logo & Decals</div>
+  <div class="section-title">Logos & Decals</div>
   <div class="drop-zone" 
        @dragover.prevent="logoZoneActive = true" 
        @dragleave.prevent="logoZoneActive = false" 
        @drop.prevent="logoZoneActive = false; uploadLogo($event.dataTransfer.files[0])"
-       :class="{ 'drag-over': logoZoneActive, 'has-file': activeLogo }">
+       :class="{ 'drag-over': logoZoneActive }">
     <input type="file" accept=".png,.jpg,.jpeg,.webp" @change="uploadLogo($event.target.files[0])">
     <div class="drop-label">
-      <template x-if="!activeLogo">
-        <span style="font-size: 0.85rem; font-weight: 600; color:var(--text-pri)">Drop or click to upload main sponsor logo<br><span>(Requires transparent PNG to blend cleanly)</span></span>
-      </template>
-      <template x-if="activeLogo">
-        <strong style="color:#10b981; font-size: 0.85rem;">✓ Logo Attached</strong>
-      </template>
+        <span style="font-size: 0.85rem; font-weight: 600; color:var(--text-pri)">Drop to add a decal layer<br><span style="font-size: 0.75rem; color:var(--text-muted); font-weight:400;">(Requires transparent PNG)</span></span>
     </div>
   </div>
   
-  <div x-show="activeLogo" x-cloak style="background: var(--bg-surface-hover); padding: 16px; border-radius: var(--radius); margin-top: 12px; border: 1px solid var(--border);">
-    <label style="margin-top:0;">Scale <span class="val" x-text="config.logo_scale + '%'"></span></label>
-    <div class="slider-row"><input type="range" min="5" max="60" x-model.number="config.logo_scale" @input.debounce.300ms="markChanged()"></div>
-    <label>Align X <span class="val" x-text="config.logo_x + '%'"></span></label>
-    <div class="slider-row"><input type="range" min="5" max="95" x-model.number="config.logo_x" @input.debounce.300ms="markChanged()"></div>
-    <label>Align Y <span class="val" x-text="config.logo_y + '%'"></span></label>
-    <div class="slider-row"><input type="range" min="5" max="95" x-model.number="config.logo_y" @input.debounce.300ms="markChanged()"></div>
-    <button class="btn-sm" style="margin-top:12px; width:100%; border-color:#ef4444; color:#ef4444;" @click="removeLogo()">Remove Logo</button>
+  <div x-show="config.logos && config.logos.length > 0" x-cloak style="margin-top: 12px; display: flex; flex-direction: column; gap: 8px;">
+    <template x-for="(logo, idx) in config.logos" :key="idx">
+      <div style="background: var(--bg-surface-hover); padding: 12px; border-radius: var(--radius); border: 1px solid var(--border);">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 8px;">
+          <span style="font-size: 0.8rem; font-weight: 600;" x-text="'Layer ' + (idx+1)"></span>
+          <button class="btn-sm" style="flex:none; width: auto; padding: 4px 8px; border-color:#ef4444; color:#ef4444;" @click="removeLogo(idx)">Remove</button>
+        </div>
+        <label style="margin-top:0;">Scale <span class="val" x-text="logo.scale + '%'"></span></label>
+        <div class="slider-row"><input type="range" min="5" max="80" x-model.number="logo.scale" @input.debounce.300ms="markChanged()"></div>
+        <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 8px;">Drag and drop directly on the 2D Preview mapping below.</p>
+      </div>
+    </template>
   </div>
 
   <!-- FINISH -->
@@ -480,8 +483,15 @@
   <div id="results" class="result-card" x-show="previewFilename" x-cloak>
     
     <!-- 2D View -->
-    <div class="preview-wrapper" x-show="viewMode === '2d'">
-      <img :src="'/preview/' + previewFilename + '?t=' + timestamp" alt="Livery" style="width: 100%;">
+    <div class="preview-wrapper" x-show="viewMode === '2d'" x-ref="twoDWrapper" style="position: relative;">
+      <img :src="'/preview/' + previewFilename + '?t=' + timestamp" alt="Livery" style="width: 100%; pointer-events: none; display: block;">
+      
+      <template x-for="(logo, idx) in config.logos" :key="idx">
+         <img :src="logo.url" 
+              :style="`position: absolute; left: ${logo.x}%; top: ${logo.y}%; width: ${logo.scale * 2}%; transform: translate(-50%, -50%); cursor: grab; z-index: 10; opacity: ${logo.activeDrag ? '0.6' : '1'}; filter: drop-shadow(0 4px 8px rgba(0,0,0,0.5));`"
+              @mousedown.prevent="startDrag(idx, $event)"
+              alt="decal">
+      </template>
     </div>
 
     <!-- 3D View -->
@@ -550,6 +560,10 @@ document.addEventListener('alpine:init', () => {
     threeMaterial: null,
 
     // Core Config State
+    history: [],
+    historyIndex: -1,
+    isUndoing: false,
+    
     config: {
       carId: 'custom',
       carNumber: '42',
@@ -571,9 +585,7 @@ document.addEventListener('alpine:init', () => {
       depth: 35,
       h_offset: 50,
       v_offset: 50,
-      logo_scale: 20,
-      logo_x: 50,
-      logo_y: 50
+      logos: []
     },
 
     init() {
@@ -608,6 +620,17 @@ document.addEventListener('alpine:init', () => {
     },
 
     markChanged() {
+      if (!this.isUndoing) {
+        if (this.historyIndex < this.history.length - 1) {
+            this.history.splice(this.historyIndex + 1);
+        }
+        if(this.history.length === 0 || JSON.stringify(this.config) !== JSON.stringify(this.history[this.historyIndex])) {
+            this.history.push(JSON.parse(JSON.stringify(this.config)));
+            if (this.history.length > 30) this.history.shift();
+            this.historyIndex = this.history.length - 1;
+        }
+      }
+      
       // Auto-save to LocalStorage
       localStorage.setItem('iRacingLiveryConfig', JSON.stringify(this.config));
       
@@ -618,6 +641,49 @@ document.addEventListener('alpine:init', () => {
 
       // Trigger automatic rebuild
       if (this.activeCar) this.triggerBuild(false);
+    },
+
+    undo() {
+      if (this.historyIndex > 0) {
+          this.isUndoing = true;
+          this.historyIndex--;
+          this.config = JSON.parse(JSON.stringify(this.history[this.historyIndex]));
+          this.markChanged();
+          setTimeout(() => { this.isUndoing = false; }, 50);
+      }
+    },
+    redo() {
+      if (this.historyIndex < this.history.length - 1) {
+          this.isUndoing = true;
+          this.historyIndex++;
+          this.config = JSON.parse(JSON.stringify(this.history[this.historyIndex]));
+          this.markChanged();
+          setTimeout(() => { this.isUndoing = false; }, 50);
+      }
+    },
+    
+    startDrag(idx, e) {
+      if(this.viewMode !== '2d') return;
+      const logo = this.config.logos[idx];
+      logo.activeDrag = true;
+      const wrapper = this.$refs.twoDWrapper;
+      const onMouseMove = (ev) => {
+          const rect = wrapper.getBoundingClientRect();
+          let xFrac = (ev.clientX - rect.left) / rect.width * 100;
+          let yFrac = (ev.clientY - rect.top) / rect.height * 100;
+          xFrac = Math.max(0, Math.min(100, xFrac));
+          yFrac = Math.max(0, Math.min(100, yFrac));
+          logo.x = Math.round(xFrac);
+          logo.y = Math.round(yFrac);
+      };
+      const onMouseUp = () => {
+          logo.activeDrag = false;
+          window.removeEventListener('mousemove', onMouseMove);
+          window.removeEventListener('mouseup', onMouseUp);
+          this.markChanged();
+      };
+      window.addEventListener('mousemove', onMouseMove);
+      window.addEventListener('mouseup', onMouseUp);
     },
 
     applyPreset(p, s, a) {
@@ -705,10 +771,7 @@ document.addEventListener('alpine:init', () => {
         v_offset: (this.config.v_offset - 50) / 100,
         cx_frac: this.config.h_offset / 100,
         cy_frac: this.config.v_offset / 100,
-        logo_id: this.activeLogo || null,
-        logo_scale: this.config.logo_scale / 100,
-        logo_x: this.config.logo_x / 100,
-        logo_y: this.config.logo_y / 100
+        logos: this.config.logos || []
       };
     },
 
@@ -767,8 +830,16 @@ document.addEventListener('alpine:init', () => {
         const r = await fetch('/upload-logo', { method: 'POST', body: form });
         const d = await r.json();
         if (d.error) throw new Error(d.error);
-        this.activeLogo = d.logo_id;
-        this.showToast('Logo successfully uploaded');
+        this.config.logos = this.config.logos || [];
+        this.config.logos.push({
+            filename: d.filename,
+            url: '/static/logos/' + d.logo_id + '/' + d.filename,
+            x: 50,
+            y: 50,
+            scale: 20,
+            activeDrag: false
+        });
+        this.showToast('Decal added to livery');
         this.markChanged();
       } catch(e) {
         this.statusError = true;
@@ -776,8 +847,8 @@ document.addEventListener('alpine:init', () => {
       }
     },
 
-    removeLogo() {
-      this.activeLogo = null;
+    removeLogo(idx) {
+      this.config.logos.splice(idx, 1);
       this.markChanged();
     },
 
