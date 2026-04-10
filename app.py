@@ -128,7 +128,8 @@ def upload_template():
         try:
             import cv2 as _cv2
             grey_np = np.array(flat_grey)
-            edges_np = _cv2.Canny(grey_np, 50, 150)
+            # Low thresholds (15/60) to catch subtle UV panel boundaries
+            edges_np = _cv2.Canny(grey_np, 15, 60)
             kernel = np.ones((2, 2), np.uint8)
             edges_np = _cv2.dilate(edges_np, kernel, iterations=1)
             _PILEdge.fromarray(edges_np).save(destdir / "edge_mask.png")
@@ -254,7 +255,7 @@ def build_livery():
     entries = [(file_clean, img_clean), (file_baked, img_baked), (file_spec, spec_map)]
     for fname, pil_img in entries:
         buf = io.BytesIO()
-        pil_img.save(buf, format="PNG")
+        pil_img.save(buf, format="PNG", compress_level=1)  # fast encode; ~same file size
         PREVIEW_CACHE[fname] = buf.getvalue()
         if len(PREVIEW_CACHE) > MAX_CACHE_SIZE:
             PREVIEW_CACHE.popitem(last=False)

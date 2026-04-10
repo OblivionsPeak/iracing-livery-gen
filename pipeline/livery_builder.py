@@ -91,14 +91,14 @@ def build(
 
     # 4. UV Template (Panel Seams)
     canvas_clean = main_canvas.copy()
-    if template_opacity > 0:
+    if template_opacity > 0 and template_path.exists():
+        # Step A — always composite the raw template at low opacity so UV seam
+        # layout is guaranteed visible regardless of edge detection quality
+        main_canvas = _overlay_template_direct(main_canvas, template_path, template_opacity)
+        # Step B — if Canny edge mask exists, add crisp seam lines on top
         edge_mask_path = template_path.parent / "edge_mask.png"
-        applied = False
         if edge_mask_path.exists():
-            main_canvas, applied = _overlay_edge_mask(main_canvas, edge_mask_path, template_opacity)
-        if not applied and template_path.exists():
-            # Edge mask missing or blank — composite the raw template directly
-            main_canvas = _overlay_template_direct(main_canvas, template_path, template_opacity)
+            main_canvas, _ = _overlay_edge_mask(main_canvas, edge_mask_path, template_opacity)
 
     # Return clean/baked visual and the one spec map
     return canvas_clean, main_canvas, spec_canvas
@@ -569,13 +569,11 @@ def _make_logo_mask(logo_path, params: dict) -> "Image.Image | None":
 
 
 def _overlay_template_direct(canvas: Image.Image, template_path: Path, opacity: float) -> Image.Image:
-    """Fallback: composite the raw UV template at low opacity to show panel seams."""
+    """Composite the UV template at the given opacity to show panel seams."""
     tmpl = Image.open(template_path).convert("RGBA").resize((SIZE, SIZE))
-    # Darken the template and reduce its opacity so it shows as subtle seam lines
-    r, g, b, a = tmpl.split()
-    # Dim the alpha by opacity so it's a subtle overlay
-    a = a.point(lambda p: int(p * opacity * 0.6))
-    tmpl = Image.merge("RGBA", (r, g, b, a))
+    arr = np.array(tmpl, dtype=np.float32)
+    arr[:, :, 3] = (arr[:, :, 3] * opacity).clip(0, 255)
+    tmpl = Image.fromarray(arr.astype(np.uint8), "RGBA")
     result = Image.alpha_composite(canvas.convert("RGBA"), tmpl)
     return result.convert("RGB")
 
@@ -590,9 +588,9 @@ def _apply_grunge(canvas: Image.Image, amount: float) -> Image.Image:
     
     # Dirt color (dark brown/grey)
     dirt = Image.new("RGB", (SIZE, SIZE), (25, 20, 15))
-    mask = noise_img.point(lambda p: p if p > 200 else 0) # Only high noise areas
-    # Scale mask by user amount (0.0 to 1.0)
-    mask = mask.point(lambda p: int(p * amount))
+    mask_arr = np.array(noise_img)
+    mask_arr = np.where(mask_arr > 200, (mask_arr * amount).clip(0, 255), 0).astype(np.uint8)
+    mask = Image.fromarray(mask_arr)
     
     canvas_rgba = canvas.convert("RGBA")
     canvas_rgba.paste(dirt, (0,0), mask=mask)
