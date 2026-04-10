@@ -7,6 +7,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<!-- Alpine.js -->
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+<!-- Three.js -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 <style>
   :root {
     --bg-base: #09090b;
@@ -21,6 +26,8 @@
     --text-muted: #71717a;
     --radius: 8px;
   }
+  
+  [x-cloak] { display: none !important; }
   
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { 
@@ -133,18 +140,18 @@
   input[type=range]:active::-webkit-slider-thumb { background: var(--accent); cursor: grabbing; }
 
   /* Dropzones */
-  #drop-zone, .logo-zone {
+  .drop-zone {
     position: relative; border: 2px dashed var(--border); border-radius: var(--radius);
     padding: 24px 16px; text-align: center; cursor: pointer;
     transition: all 0.2s; background: rgba(0,0,0,0.2);
   }
-  #drop-zone:hover, .logo-zone:hover, #drop-zone.drag-over { border-color: var(--accent); background: rgba(234,179,8,0.05); }
-  #drop-zone.has-file, .logo-zone.has-logo { border-color: #10b981; border-style: solid; background: rgba(16,185,129,0.05); }
-  #drop-zone input[type=file], .logo-zone input {
+  .drop-zone.drag-over { border-color: var(--accent); background: rgba(234,179,8,0.1); transform: scale(1.02); }
+  .drop-zone.has-file { border-color: #10b981; border-style: solid; background: rgba(16,185,129,0.05); }
+  .drop-zone input[type=file] {
     position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
   }
-  #drop-label, #logo-label { font-size: 0.85rem; font-weight: 500; color: var(--text-sec); pointer-events: none; line-height: 1.5; }
-  #drop-label span { font-size: 0.75rem; color: var(--text-muted); font-weight: 400; }
+  .drop-label { font-size: 0.85rem; font-weight: 500; color: var(--text-sec); pointer-events: none; line-height: 1.5; }
+  .drop-label span { font-size: 0.75rem; color: var(--text-muted); font-weight: 400; }
 
   #template-status { font-size: 0.8rem; font-weight: 500; margin-top: 8px; display: inline-flex; align-items: center; gap: 6px; }
   .ok { color: #10b981; } .missing { color: var(--text-muted); }
@@ -155,7 +162,7 @@
     font-weight: 700; font-size: 1rem; border: none; border-radius: var(--radius);
     cursor: pointer; transition: all 0.2s; box-shadow: 0 4px 14px rgba(234, 179, 8, 0.2);
   }
-  .btn-build:hover { background: var(--accent-hover); transform: translateY(-1px); box-shadow: 0 6px 20px rgba(234, 179, 8, 0.3); }
+  .btn-build:hover:not(:disabled) { background: var(--accent-hover); transform: translateY(-1px); box-shadow: 0 6px 20px rgba(234, 179, 8, 0.3); }
   .btn-build:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; background: var(--border); color: var(--text-muted); }
 
   .btn-vary {
@@ -163,7 +170,7 @@
     font-size: 0.85rem; font-weight: 500; border: 1px solid var(--border); border-radius: var(--radius); cursor: pointer;
     transition: all 0.2s;
   }
-  .btn-vary:hover { color: var(--text-pri); border-color: var(--border-hover); background: var(--bg-surface-hover); }
+  .btn-vary:hover:not(:disabled) { color: var(--text-pri); border-color: var(--border-hover); background: var(--bg-surface-hover); }
 
   details summary { list-style: none; user-select: none; }
   details summary::-webkit-details-marker { display: none; }
@@ -173,7 +180,6 @@
     position: sticky; top: 24px; display: flex; flex-direction: column; gap: 16px;
   }
   
-  /* Checkerboard backdrop for transparency */
   .preview-wrapper {
     background-color: #1a1a1a;
     background-image: 
@@ -186,6 +192,10 @@
     overflow: hidden;
     position: relative;
     box-shadow: 0 20px 40px -10px rgba(0,0,0,0.8), inset 0 2px 20px rgba(0,0,0,0.5);
+    min-height: 400px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
   
   .result-card { border-radius: calc(var(--radius) * 1.5); overflow: hidden; background: var(--bg-surface); border: 1px solid var(--border); }
@@ -211,9 +221,6 @@
   }
   .btn-export:hover { border-color: var(--border-hover); background: #27272a; }
 
-  #params-angle, #params-split, #params-feather, #params-chevron, #params-offset { display: none; margin-top: 12px; }
-  #params-stripe-dir { display: none; margin-top: 12px; }
-
   .spinner {
     display: inline-block; width: 16px; height: 16px; border: 2px solid var(--border);
     border-top-color: var(--accent); border-radius: 50%;
@@ -226,13 +233,33 @@
 
   .row { display: flex; gap: 16px; }
   .row > * { flex: 1; min-width: 0; }
+  
+  /* View Toggle Tabs */
+  .view-tabs { display: flex; background: var(--bg-base); padding: 4px; border-radius: var(--radius); gap: 4px; margin-bottom: 16px; }
+  .view-tab { flex: 1; padding: 8px; text-align: center; border-radius: calc(var(--radius) - 2px); font-size: 0.85rem; font-weight: 600; color: var(--text-sec); cursor: pointer; transition: all 0.2s; user-select: none; }
+  .view-tab.active { background: var(--bg-surface); color: var(--accent); box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
+  .view-tab:hover:not(.active) { color: var(--text-pri); }
+  
+  .three-container { width: 100%; aspect-ratio: 1; cursor: grab; background: #000; border-radius: calc(var(--radius) * 1.5 - 2px); }
+  .three-container:active { cursor: grabbing; }
+
+  /* Notification Toast */
+  .toast {
+    position: fixed; bottom: 24px; right: 24px; background: rgba(16, 185, 129, 0.9); backdrop-filter: blur(4px);
+    color: #fff; padding: 12px 24px; border-radius: var(--radius); font-weight: 600; font-size: 0.9rem;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.3); transform: translateY(100px); opacity: 0; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 1000;
+  }
+  .toast.show { transform: translateY(0); opacity: 1; }
 </style>
 </head>
-<body>
+<body x-data="liveryEditor()" x-init="init()">
 <div class="header">
   <h1>iRacing Livery Generator</h1>
-  <p class="subtitle">Programmatic livery builder — no GPU required. Upload your car template, pick colors, download.</p>
+  <p class="subtitle">Programmatic livery builder — no GPU required. Upload your car template, pick colors, view in 3D, and download.</p>
 </div>
+
+<div class="toast" :class="{'show': toastMsg !== ''}" x-text="toastMsg"></div>
 
 <div class="layout">
 
@@ -241,22 +268,31 @@
 
   <div class="section-title">Car &amp; Template</div>
 
-  <div id="drop-zone">
-    <input type="file" id="template-file" accept=".png,.psd,.tga,.zip">
-    <div id="drop-label">Drop or click to upload full template<br><span>Supports PNG, PSD, and TGA</span></div>
+  <div class="drop-zone" 
+       @dragover.prevent="dropZoneActive = true" 
+       @dragleave.prevent="dropZoneActive = false" 
+       @drop.prevent="dropZoneActive = false; uploadTemplate($event.dataTransfer.files[0])"
+       :class="{ 'drag-over': dropZoneActive, 'has-file': activeCar }">
+    <input type="file" accept=".png,.psd,.tga,.zip" @change="uploadTemplate($event.target.files[0])">
+    <div class="drop-label">
+      <template x-if="!activeCar"><span style="font-size: 0.85rem; font-weight: 600; color:var(--text-pri)">Drop or click to upload full template<br></span></template>
+      <template x-if="activeCar"><strong style="color:#10b981; font-size: 0.85rem;" x-text="activeCar + ' Ready'"><br></strong></template>
+      <span>Supports PNG, PSD, and TGA</span>
+    </div>
   </div>
-  <div id="template-status"></div>
+  
+  <div id="template-status" :class="statusError ? 'missing' : 'ok'" x-show="templateStatus" x-text="templateStatus"></div>
 
   <div class="row" style="margin-top: 16px;">
     <div>
       <label style="margin-top:0;">Car Number <span class="val" style="font-size:0.7rem; color:var(--text-muted);">(Export)</span></label>
-      <input type="text" id="car-number" value="42" maxlength="4">
+      <input type="text" x-model.lazy="config.carNumber" maxlength="4">
     </div>
   </div>
 
   <details style="margin-top:16px;">
     <summary style="font-size:0.8rem; font-weight: 500; color:var(--accent); cursor:pointer;">Select Known Car (Optional iRacing Export) ▸</summary>
-    <select id="car-select" style="margin-top:8px;">
+    <select x-model="config.carId" style="margin-top:8px;">
       <option value="custom">— none / auto-detect —</option>
       {% for series, cars in groups.items() %}
       <optgroup label="{{ series }}">
@@ -274,144 +310,89 @@
   <div class="section-title">Colors</div>
   <div class="preset-bar">
     <span style="font-size:0.7rem; font-weight: 600; color:var(--text-muted); display:flex; align-items:center; margin-right: 4px;">PRESETS</span>
-    <button class="preset-btn" data-p="#0a0a0a" data-s="#c8102e" data-a="#ffffff">GT Red</button>
-    <button class="preset-btn" data-p="#ffffff" data-s="#003087" data-a="#c8102e">Gulf</button>
-    <button class="preset-btn" data-p="#003087" data-s="#ffd700" data-a="#ffffff">Rothmans</button>
-    <button class="preset-btn" data-p="#1b1b1b" data-s="#ffd700" data-a="#888888">Carbon Gold</button>
-    <button class="preset-btn" data-p="#006341" data-s="#ffffff" data-a="#ffd700">British Green</button>
-    <button class="preset-btn" data-p="#e8e8e8" data-s="#cc0000" data-a="#111111">Martini</button>
-    <button class="preset-btn" data-p="#2d2d2d" data-s="#ff6b00" data-a="#ffffff">Stealth</button>
+    <button class="preset-btn" @click="applyPreset('#0a0a0a', '#c8102e', '#ffffff')">GT Red</button>
+    <button class="preset-btn" @click="applyPreset('#ffffff', '#003087', '#c8102e')">Gulf</button>
+    <button class="preset-btn" @click="applyPreset('#003087', '#ffd700', '#ffffff')">Rothmans</button>
+    <button class="preset-btn" @click="applyPreset('#1b1b1b', '#ffd700', '#888888')">Carbon Gold</button>
+    <button class="preset-btn" @click="applyPreset('#006341', '#ffffff', '#ffd700')">British Green</button>
+    <button class="preset-btn" @click="applyPreset('#e8e8e8', '#cc0000', '#111111')">Martini</button>
+    <button class="preset-btn" @click="applyPreset('#2d2d2d', '#ff6b00', '#ffffff')">Stealth</button>
   </div>
   
   <div class="color-grid">
     <div class="color-card">
       <label>PRIMARY</label>
-      <div class="color-picker-wrap">
-        <input type="color" id="col-primary" value="#1a1a2e">
-      </div>
-      <input type="text" class="color-hex" id="hex-primary" value="#1a1a2e" maxlength="7">
+      <div class="color-picker-wrap"><input type="color" x-model="config.primary" @input.debounce.300ms="markChanged()"></div>
+      <input type="text" class="color-hex" x-model.lazy="config.primary" maxlength="7" @change="markChanged()">
     </div>
     <div class="color-card">
       <label>SECONDARY</label>
-      <div class="color-picker-wrap">
-        <input type="color" id="col-secondary" value="#e63946">
-      </div>
-      <input type="text" class="color-hex" id="hex-secondary" value="#e63946" maxlength="7">
+      <div class="color-picker-wrap"><input type="color" x-model="config.secondary" @input.debounce.300ms="markChanged()"></div>
+      <input type="text" class="color-hex" x-model.lazy="config.secondary" maxlength="7" @change="markChanged()">
     </div>
     <div class="color-card">
       <label>ACCENT</label>
-      <div class="color-picker-wrap">
-        <input type="color" id="col-accent" value="#ffd700">
-      </div>
-      <input type="text" class="color-hex" id="hex-accent" value="#ffd700" maxlength="7">
+      <div class="color-picker-wrap"><input type="color" x-model="config.accent" @input.debounce.300ms="markChanged()"></div>
+      <input type="text" class="color-hex" x-model.lazy="config.accent" maxlength="7" @change="markChanged()">
     </div>
   </div>
   
   <div class="btn-row">
-    <button class="btn-sm gold" onclick="suggestHarmony()">Auto-Harmony</button>
-    <button class="btn-sm" onclick="saveConfig()">Save Palette</button>
-    <label class="btn-sm" style="display:flex;align-items:center;justify-content:center;margin:0;cursor:pointer;">Load Config<input type="file" id="config-file" accept=".json" style="display:none" onchange="loadConfig(this)"></label>
-    <button class="btn-sm" onclick="shareConfig()">Copy Link</button>
+    <button class="btn-sm gold" @click="suggestHarmony()">Auto-Harmony</button>
+    <label class="btn-sm" style="display:flex;align-items:center;justify-content:center;margin:0;cursor:pointer;">Load JSON<input type="file" accept=".json" style="display:none" @change="loadConfig($event.target.files[0])"></label>
+    <button class="btn-sm" @click="shareConfig()">Copy URL Link</button>
   </div>
 
   <!-- DESIGN PATTERN -->
   <div class="section-title">Design Layer</div>
   <div class="design-grid">
-    <div class="design-btn active" data-design="solid">
-      <svg><rect width="24" height="24" fill="currentColor"/></svg> Solid
-    </div>
-    <div class="design-btn" data-design="racing_stripes">
-      <svg><rect width="24" height="24" fill="currentColor" fill-opacity="0.2"/><path d="M8 0h3v24H8zM13 0h3v24h-3z"/></svg> Stripes
-    </div>
-    <div class="design-btn" data-design="diagonal_stripes">
-      <svg><rect width="24" height="24" fill="currentColor" fill-opacity="0.2"/><path d="M0 16L16 0h8L0 24z"/></svg> Diagonal
-    </div>
-    <div class="design-btn" data-design="gradient">
-      <svg><defs><linearGradient id="g1"><stop offset="0%" stop-color="currentColor"/><stop offset="100%" stop-color="currentColor" stop-opacity="0"/></linearGradient></defs><rect width="24" height="24" fill="url(#g1)"/></svg> Gradient
-    </div>
-    <div class="design-btn" data-design="sweep">
-      <svg><path d="M0 16l12-8h12v6l-12 10H0z"/></svg> GT Sweep
-    </div>
-    <div class="design-btn" data-design="split">
-      <svg><rect y="6" width="24" height="12"/></svg> Split
-    </div>
-    <div class="design-btn" data-design="chevron">
-      <svg><path d="M0 0l12 12L0 24h6l12-12L6 0z"/></svg> Chevron
-    </div>
-    <div class="design-btn" data-design="two_tone">
-      <svg><path d="M0 24L24 0v24z"/></svg> Two-Tone
-    </div>
-    <div class="design-btn" data-design="gradient_chevron">
-      <svg><path d="M0 0l10 10v4L0 24z" fill-opacity="0.5"/><path d="M0 4l6 8-6 8z"/></svg> Grad Chev
-    </div>
-    <div class="design-btn" data-design="radial_gradient">
-      <svg><circle cx="12" cy="12" r="10" fill="currentColor" fill-opacity="0.5"/></svg> Radial
-    </div>
-    <div class="design-btn" data-design="harlequin">
-      <svg><path d="M12 0l6 6-6 6-6-6z M12 12l6 6-6 6-6-6z M0 6l6 6-6 6-6-6z M24 6l-6 6-6-6 6-6z"/></svg> Harlequin
-    </div>
-    <div class="design-btn" data-design="pinstripe">
-      <svg><path d="M0 20L20 0h2L0 22zM0 10L10 0h2L0 12z" /></svg> Pinstripe
-    </div>
-    <div class="design-btn" data-design="number_panel">
-      <svg><rect width="24" height="24" fill="currentColor" fill-opacity="0.2"/><rect x="6" y="8" width="12" height="8" rx="1"/></svg> Num Panel
-    </div>
+    <template x-for="d in designs" :key="d.id">
+      <div class="design-btn" :class="{ 'active': config.design === d.id }" @click="config.design = d.id; markChanged()">
+        <span x-html="d.svg"></span> <span x-text="d.name"></span>
+      </div>
+    </template>
   </div>
 
-  <div id="params-angle">
-    <label>Angle <span class="val" id="angle-val">45°</span></label>
-    <div class="slider-row">
-      <input type="range" id="angle" min="10" max="80" value="45" oninput="document.getElementById('angle-val').textContent=this.value+'°'; scheduleLive()">
-    </div>
-    <label>Stripe Width <span class="val" id="sw-val">160</span></label>
-    <div class="slider-row">
-      <input type="range" id="stripe-width" min="40" max="400" value="160" oninput="document.getElementById('sw-val').textContent=this.value; scheduleLive()">
-    </div>
+  <div x-show="['diagonal_stripes','racing_stripes','two_tone'].includes(config.design)" x-cloak style="margin-top: 12px;">
+    <label>Angle <span class="val" x-text="config.angle + '°'"></span></label>
+    <div class="slider-row"><input type="range" min="10" max="80" x-model.number="config.angle" @input.debounce.300ms="markChanged()"></div>
+    <label>Stripe Width <span class="val" x-text="config.stripe_width"></span></label>
+    <div class="slider-row"><input type="range" min="40" max="400" x-model.number="config.stripe_width" @input.debounce.300ms="markChanged()"></div>
   </div>
 
-  <div id="params-stripe-dir">
+  <div x-show="config.design === 'racing_stripes'" x-cloak style="margin-top: 12px;">
     <label>Direction</label>
-    <select id="stripe-dir" onchange="scheduleLive()">
+    <select x-model="config.stripe_dir" @change="markChanged()">
       <option value="vertical">Vertical</option>
       <option value="horizontal">Horizontal</option>
     </select>
   </div>
 
-  <div id="params-split">
-    <label>Split Position <span class="val" id="sp-val">50%</span></label>
-    <div class="slider-row">
-      <input type="range" id="split-pos" min="20" max="80" value="50" oninput="document.getElementById('sp-val').textContent=this.value+'%'; scheduleLive()">
-    </div>
+  <div x-show="['split','gradient'].includes(config.design)" x-cloak style="margin-top: 12px;">
+    <label>Split Position <span class="val" x-text="config.split + '%'"></span></label>
+    <div class="slider-row"><input type="range" min="20" max="80" x-model.number="config.split" @input.debounce.300ms="markChanged()"></div>
     <label>Direction</label>
-    <select id="split-dir" onchange="scheduleLive()">
+    <select x-model="config.split_dir" @change="markChanged()">
       <option value="horizontal">Horizontal</option>
       <option value="vertical">Vertical</option>
     </select>
   </div>
 
-  <div id="params-feather">
-    <label>Edge Fade <span class="val" id="feather-val">60px</span></label>
-    <div class="slider-row">
-      <input type="range" id="feather" min="0" max="200" value="60" oninput="document.getElementById('feather-val').textContent=this.value+'px'; scheduleLive()">
-    </div>
+  <div x-show="config.design === 'gradient_chevron'" x-cloak style="margin-top: 12px;">
+    <label>Edge Fade <span class="val" x-text="config.feather + 'px'"></span></label>
+    <div class="slider-row"><input type="range" min="0" max="200" x-model.number="config.feather" @input.debounce.300ms="markChanged()"></div>
   </div>
 
-  <div id="params-chevron">
-    <label>Chevron Angle <span class="val" id="depth-val">35%</span></label>
-    <div class="slider-row">
-      <input type="range" id="chevron-depth" min="5" max="70" value="35" oninput="document.getElementById('depth-val').textContent=this.value+'%'; scheduleLive()">
-    </div>
+  <div x-show="['chevron','gradient_chevron'].includes(config.design)" x-cloak style="margin-top: 12px;">
+    <label>Chevron Angle <span class="val" x-text="config.depth + '%'"></span></label>
+    <div class="slider-row"><input type="range" min="5" max="70" x-model.number="config.depth" @input.debounce.300ms="markChanged()"></div>
   </div>
 
-  <div id="params-offset">
-    <label>Horizontal Offset <span class="val" id="offset-x-val">50%</span></label>
-    <div class="slider-row">
-      <input type="range" id="h-offset" min="10" max="90" value="50" oninput="document.getElementById('offset-x-val').textContent=this.value+'%'; scheduleLive()">
-    </div>
-    <label>Vertical Offset <span class="val" id="offset-y-val">50%</span></label>
-    <div class="slider-row">
-      <input type="range" id="v-offset" min="10" max="90" value="50" oninput="document.getElementById('offset-y-val').textContent=this.value+'%'; scheduleLive()">
-    </div>
+  <div x-show="['sweep','chevron','gradient_chevron','radial_gradient','number_panel'].includes(config.design)" x-cloak style="margin-top: 12px;">
+    <label>Horizontal Offset <span class="val" x-text="config.h_offset + '%'"></span></label>
+    <div class="slider-row"><input type="range" min="10" max="90" x-model.number="config.h_offset" @input.debounce.300ms="markChanged()"></div>
+    <label>Vertical Offset <span class="val" x-text="config.v_offset + '%'"></span></label>
+    <div class="slider-row"><input type="range" min="10" max="90" x-model.number="config.v_offset" @input.debounce.300ms="markChanged()"></div>
   </div>
 
   <!-- OVERLAY PATTERN -->
@@ -419,49 +400,43 @@
   <div class="row">
     <div>
       <label style="margin-top:0;">Secondary Pattern</label>
-      <select id="overlay-design" onchange="scheduleLive()">
+      <select x-model="config.overlay_design" @change="markChanged()">
         <option value="none">None</option>
-        <option value="solid">Solid</option>
-        <option value="racing_stripes">Racing Stripes</option>
-        <option value="diagonal_stripes">Diagonal</option>
-        <option value="gradient">Gradient</option>
-        <option value="sweep">GT Sweep</option>
-        <option value="split">Split</option>
-        <option value="chevron">Chevron</option>
-        <option value="two_tone">Two-Tone</option>
-        <option value="gradient_chevron">Grad. Chevron</option>
-        <option value="radial_gradient">Radial</option>
-        <option value="harlequin">Harlequin</option>
-        <option value="pinstripe">Pinstripe</option>
-        <option value="number_panel">Num Panel</option>
+        <template x-for="d in designs" :key="d.id"><option :value="d.id" x-text="d.name"></option></template>
       </select>
     </div>
     <div>
-      <label style="margin-top:0;">Mix Opacity <span class="val" id="ov-val">40%</span></label>
-      <input type="range" id="overlay-opacity" min="0" max="90" value="40" style="margin-top:14px;" oninput="document.getElementById('ov-val').textContent=this.value+'%'; scheduleLive()">
+      <label style="margin-top:0;">Mix Opacity <span class="val" x-text="config.overlay_opacity + '%'"></span></label>
+      <input type="range" min="0" max="90" style="margin-top:14px;" x-model.number="config.overlay_opacity" @input.debounce.300ms="markChanged()">
     </div>
   </div>
 
   <!-- LOGO / SPONSOR -->
   <div class="section-title">Logo & Decals</div>
-  <div class="logo-zone" id="logo-zone">
-    <input type="file" id="logo-file" accept=".png,.jpg,.jpeg,.webp" onchange="uploadLogo(this)">
-    <div id="logo-label">Drop or click to upload main sponsor logo<br><span>(Requires transparent PNG to blend cleanly)</span></div>
+  <div class="drop-zone" 
+       @dragover.prevent="logoZoneActive = true" 
+       @dragleave.prevent="logoZoneActive = false" 
+       @drop.prevent="logoZoneActive = false; uploadLogo($event.dataTransfer.files[0])"
+       :class="{ 'drag-over': logoZoneActive, 'has-file': activeLogo }">
+    <input type="file" accept=".png,.jpg,.jpeg,.webp" @change="uploadLogo($event.target.files[0])">
+    <div class="drop-label">
+      <template x-if="!activeLogo">
+        <span style="font-size: 0.85rem; font-weight: 600; color:var(--text-pri)">Drop or click to upload main sponsor logo<br><span>(Requires transparent PNG to blend cleanly)</span></span>
+      </template>
+      <template x-if="activeLogo">
+        <strong style="color:#10b981; font-size: 0.85rem;">✓ Logo Attached</strong>
+      </template>
+    </div>
   </div>
-  <div id="logo-controls" style="display:none; background: var(--bg-surface-hover); padding: 16px; border-radius: var(--radius); margin-top: 12px; border: 1px solid var(--border);">
-    <label style="margin-top:0;">Scale <span class="val" id="logo-scale-val">20%</span></label>
-    <div class="slider-row">
-      <input type="range" id="logo-scale" min="5" max="60" value="20" oninput="document.getElementById('logo-scale-val').textContent=this.value+'%'; scheduleLive()">
-    </div>
-    <label>Align X <span class="val" id="logo-x-val">50%</span></label>
-    <div class="slider-row">
-      <input type="range" id="logo-x" min="5" max="95" value="50" oninput="document.getElementById('logo-x-val').textContent=this.value+'%'; scheduleLive()">
-    </div>
-    <label>Align Y <span class="val" id="logo-y-val">50%</span></label>
-    <div class="slider-row">
-      <input type="range" id="logo-y" min="5" max="95" value="50" oninput="document.getElementById('logo-y-val').textContent=this.value+'%'; scheduleLive()">
-    </div>
-    <button class="btn-sm" style="margin-top:12px; width:100%; border-color:#ef4444; color:#ef4444;" onclick="removeLogo()">Remove Logo</button>
+  
+  <div x-show="activeLogo" x-cloak style="background: var(--bg-surface-hover); padding: 16px; border-radius: var(--radius); margin-top: 12px; border: 1px solid var(--border);">
+    <label style="margin-top:0;">Scale <span class="val" x-text="config.logo_scale + '%'"></span></label>
+    <div class="slider-row"><input type="range" min="5" max="60" x-model.number="config.logo_scale" @input.debounce.300ms="markChanged()"></div>
+    <label>Align X <span class="val" x-text="config.logo_x + '%'"></span></label>
+    <div class="slider-row"><input type="range" min="5" max="95" x-model.number="config.logo_x" @input.debounce.300ms="markChanged()"></div>
+    <label>Align Y <span class="val" x-text="config.logo_y + '%'"></span></label>
+    <div class="slider-row"><input type="range" min="5" max="95" x-model.number="config.logo_y" @input.debounce.300ms="markChanged()"></div>
+    <button class="btn-sm" style="margin-top:12px; width:100%; border-color:#ef4444; color:#ef4444;" @click="removeLogo()">Remove Logo</button>
   </div>
 
   <!-- FINISH -->
@@ -469,7 +444,7 @@
   <div class="row">
     <div>
       <label style="margin-top:0;">Surface</label>
-      <select id="texture" onchange="scheduleLive()">
+      <select x-model="config.texture" @change="markChanged()">
         <option value="none">Clearcoat (Gloss)</option>
         <option value="matte">Matte</option>
         <option value="carbon_fiber">Carbon Fiber</option>
@@ -477,421 +452,463 @@
       </select>
     </div>
     <div>
-      <label style="margin-top:0;">Texture Mix <span class="val" id="to-val">25%</span></label>
-      <input type="range" id="texture-opacity" min="0" max="70" value="25" style="margin-top:14px;" oninput="document.getElementById('to-val').textContent=this.value+'%'; scheduleLive()">
+      <label style="margin-top:0;">Texture Mix <span class="val" x-text="config.texture_opacity + '%'"></span></label>
+      <input type="range" min="0" max="70" style="margin-top:14px;" x-model.number="config.texture_opacity" @input.debounce.300ms="markChanged()">
     </div>
   </div>
-  <label>Seam Line Visibility <span class="val" id="tpl-val">35%</span></label>
-  <input type="range" id="template-opacity" min="0" max="80" value="35" style="margin-top:4px;" oninput="document.getElementById('tpl-val').textContent=this.value+'%'; scheduleLive()">
+  <label>Seam Line Visibility <span class="val" x-text="config.template_opacity + '%'"></span></label>
+  <input type="range" min="0" max="80" style="margin-top:4px;" x-model.number="config.template_opacity" @input.debounce.300ms="markChanged()">
 
-  <button class="btn-build" id="btn-build">Generate High-Res Livery</button>
-  <button class="btn-vary" id="btn-vary">✨ Generate 4 AI Variations</button>
-  <div id="status"></div>
+  <button class="btn-build" :disabled="isBuilding || !activeCar" @click="triggerBuild(true)">
+    <span x-show="isBuilding" class="spinner"></span>
+    <span x-text="isBuilding ? 'Generating...' : 'Generate High-Res Livery'"></span>
+  </button>
+  
+  <div id="status" :class="statusError ? 'error' : ''" x-html="statusMsg"></div>
 
 </div>
 
 <!-- ── RIGHT PANEL ── -->
 <div class="result-pane">
-  <div id="results">
-     <div style="padding: 48px; text-align: center; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-surface);">
-       <svg style="width:48px;height:48px;fill:var(--text-muted);margin-bottom:16px;" viewBox="0 0 24 24"><path d="M21 3H3C2 3 1 4 1 5v14c0 1.1.9 2 2 2h18c1 0 2-.9 2-2V5c0-1.1-1-2-2-2zM5 17l3.5-4.5 2.5 3.01L14.5 11l4.5 6H5z"/></svg>
+
+  <!-- View Toggle Tabs -->
+  <div class="view-tabs">
+    <div class="view-tab" :class="{'active': viewMode === '2d'}" @click="viewMode = '2d'">2D Mapping</div>
+    <div class="view-tab" :class="{'active': viewMode === '3d'}" @click="viewMode = '3d'">3D Decal Viewer</div>
+  </div>
+
+  <div id="results" class="result-card" x-show="previewFilename" x-cloak>
+    
+    <!-- 2D View -->
+    <div class="preview-wrapper" x-show="viewMode === '2d'">
+      <img :src="'/preview/' + previewFilename + '?t=' + timestamp" alt="Livery" style="width: 100%;">
+    </div>
+
+    <!-- 3D View -->
+    <div x-show="viewMode === '3d'" class="three-container" x-ref="threeCanvas"></div>
+    
+    <div class="result-footer">
+      <span class="result-label" x-text="previewFilename"></span>
+      <div style="display:flex;gap:6px;">
+        <button class="btn-export" @click="exportToIRacing()">Export to iRacing</button>
+        <a class="btn-dl" :href="'/download/' + previewFilename" :download="previewFilename">Download PNG</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="preview-wrapper" x-show="!previewFilename" style="background: var(--bg-surface);">
+     <div style="padding: 48px; text-align: center;">
+       <svg style="width:48px;height:48px;fill:var(--text-muted);margin: 0 auto 16px;" viewBox="0 0 24 24"><path d="M21 3H3C2 3 1 4 1 5v14c0 1.1.9 2 2 2h18c1 0 2-.9 2-2V5c0-1.1-1-2-2-2zM5 17l3.5-4.5 2.5 3.01L14.5 11l4.5 6H5z"/></svg>
        <p style="color:var(--text-sec);font-size:0.95rem;font-weight:500;">Upload an iRacing template and click Generate.</p>
-       <p style="color:var(--text-muted);font-size:0.8rem;margin-top:8px;">Your high-res preview will appear here.</p>
+       <p style="color:var(--text-muted);font-size:0.8rem;margin-top:8px;">Your responsive preview will appear here.</p>
      </div>
   </div>
 </div>
 
 </div><!-- end layout -->
+
 <script>
-const carSelect = document.getElementById('car-select');
-const statusEl  = document.getElementById('status');
-const dropZone  = document.getElementById('drop-zone');
-const fileInput = document.getElementById('template-file');
-let   activeCar = null;  // set after template is uploaded
+// Available Designs Map
+const DESIGNS = [
+  {id:'solid', name:'Solid', svg:'<svg><rect width="24" height="24" fill="currentColor"/></svg>'},
+  {id:'racing_stripes', name:'Stripes', svg:'<svg><rect width="24" height="24" fill="currentColor" fill-opacity="0.2"/><path d="M8 0h3v24H8zM13 0h3v24h-3z"/></svg>'},
+  {id:'diagonal_stripes', name:'Diagonal', svg:'<svg><rect width="24" height="24" fill="currentColor" fill-opacity="0.2"/><path d="M0 16L16 0h8L0 24z"/></svg>'},
+  {id:'gradient', name:'Gradient', svg:'<svg><defs><linearGradient id="g1"><stop offset="0%" stop-color="currentColor"/><stop offset="100%" stop-color="currentColor" stop-opacity="0"/></linearGradient></defs><rect width="24" height="24" fill="url(#g1)"/></svg>'},
+  {id:'sweep', name:'GT Sweep', svg:'<svg><path d="M0 16l12-8h12v6l-12 10H0z"/></svg>'},
+  {id:'split', name:'Split', svg:'<svg><rect y="6" width="24" height="12"/></svg>'},
+  {id:'chevron', name:'Chevron', svg:'<svg><path d="M0 0l12 12L0 24h6l12-12L6 0z"/></svg>'},
+  {id:'two_tone', name:'Two-Tone', svg:'<svg><path d="M0 24L24 0v24z"/></svg>'},
+  {id:'gradient_chevron', name:'Grad Chev', svg:'<svg><path d="M0 0l10 10v4L0 24z" fill-opacity="0.5"/><path d="M0 4l6 8-6 8z"/></svg>'},
+  {id:'radial_gradient', name:'Radial', svg:'<svg><circle cx="12" cy="12" r="10" fill="currentColor" fill-opacity="0.5"/></svg>'},
+  {id:'harlequin', name:'Harlequin', svg:'<svg><path d="M12 0l6 6-6 6-6-6z M12 12l6 6-6 6-6-6z M0 6l6 6-6 6-6-6z M24 6l-6 6-6-6 6-6z"/></svg>'},
+  {id:'pinstripe', name:'Pinstripe', svg:'<svg><path d="M0 20L20 0h2L0 22zM0 10L10 0h2L0 12z" /></svg>'},
+  {id:'number_panel', name:'Num Panel', svg:'<svg><rect width="24" height="24" fill="currentColor" fill-opacity="0.2"/><rect x="6" y="8" width="12" height="8" rx="1"/></svg>'}
+];
 
-// ── Drop zone ──
-dropZone.addEventListener('dragover',  e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
-dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
-dropZone.addEventListener('drop', e => {
-  e.preventDefault();
-  dropZone.classList.remove('drag-over');
-  if (e.dataTransfer.files.length) {
-    fileInput.files = e.dataTransfer.files;
-    handleFileSelected(e.dataTransfer.files[0]);
-  }
-});
-fileInput.addEventListener('change', () => {
-  if (fileInput.files.length) handleFileSelected(fileInput.files[0]);
-});
+document.addEventListener('alpine:init', () => {
+  Alpine.data('liveryEditor', () => ({
+    designs: DESIGNS,
+    activeCar: null,
+    activeLogo: null,
+    
+    // UI State
+    dropZoneActive: false,
+    logoZoneActive: false,
+    templateStatus: '',
+    statusMsg: '',
+    statusError: false,
+    isBuilding: false,
+    previewFilename: null,
+    timestamp: Date.now(),
+    viewMode: '2d',
+    toastMsg: '',
+    toastTimer: null,
+    
+    // Three.js State
+    threeInit: false,
+    threeScene: null,
+    threeMaterial: null,
 
-function handleFileSelected(file) {
-  document.getElementById('drop-label').innerHTML =
-    `<strong style="color:#ddd">${file.name}</strong><br><span>Click Upload Template to process</span>`;
-  dropZone.classList.add('has-file');
-  uploadTemplate();
-}
+    // Core Config State
+    config: {
+      carId: 'custom',
+      carNumber: '42',
+      primary: '#1a1a2e',
+      secondary: '#e63946',
+      accent: '#ffd700',
+      design: 'solid',
+      angle: 45,
+      stripe_width: 160,
+      split: 50,
+      stripe_dir: 'horizontal',
+      split_dir: 'horizontal',
+      texture: 'none',
+      texture_opacity: 25,
+      template_opacity: 35,
+      overlay_design: 'none',
+      overlay_opacity: 40,
+      feather: 60,
+      depth: 35,
+      h_offset: 50,
+      v_offset: 50,
+      logo_scale: 20,
+      logo_x: 50,
+      logo_y: 50
+    },
 
-async function uploadTemplate() {
-  if (!fileInput.files.length) return;
-  const carId = carSelect.value;
-  setStatus('<span class="spinner"></span>Processing template...');
-  document.getElementById('btn-build').disabled = true;
-
-  const form = new FormData();
-  form.append('car_id', carId === 'custom' ? '' : carId);
-  form.append('file', fileInput.files[0]);
-
-  try {
-    const r = await fetch('/upload-template', { method: 'POST', body: form });
-    const d = await r.json();
-    if (d.error) throw new Error(d.error);
-    activeCar = d.car_id;
-    document.getElementById('template-status').textContent = `✓ Template ready (${activeCar})`;
-    document.getElementById('template-status').className = 'ok';
-    document.getElementById('btn-build').disabled = false;
-    document.getElementById('btn-vary').disabled  = false;
-    setStatus('');
-    scheduleLive();
-  } catch(e) {
-    setStatus('Error: ' + e.message, true);
-    document.getElementById('btn-build').disabled = true;
-  }
-}
-
-function getCarId() {
-  return activeCar || (carSelect.value !== 'custom' ? carSelect.value : 'custom');
-}
-
-// ── Color pickers with live preview ──
-let liveTimer = null;
-['primary','secondary','accent'].forEach(name => {
-  const picker = document.getElementById('col-' + name);
-  const hex    = document.getElementById('hex-' + name);
-  picker.addEventListener('input', () => { hex.value = picker.value; scheduleLive(); });
-  hex.addEventListener('input', () => {
-    if (/^#[0-9a-fA-F]{6}$/.test(hex.value)) { picker.value = hex.value; scheduleLive(); }
-  });
-});
-
-function scheduleLive() {
-  clearTimeout(liveTimer);
-  liveTimer = setTimeout(() => {
-    if (activeCar) triggerBuild(false);
-  }, 500);
-}
-
-// ── Presets ──
-document.querySelectorAll('.preset-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    setColor('primary',   btn.dataset.p);
-    setColor('secondary', btn.dataset.s);
-    setColor('accent',    btn.dataset.a);
-    scheduleLive();
-  });
-});
-function setColor(name, h) {
-  document.getElementById('col-' + name).value = h;
-  document.getElementById('hex-' + name).value = h;
-}
-
-// ── Design buttons ──
-let selectedDesign = 'solid';
-document.querySelectorAll('.design-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.design-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    selectedDesign = btn.dataset.design;
-    document.getElementById('params-angle').style.display =
-      ['diagonal_stripes','racing_stripes','two_tone'].includes(selectedDesign) ? 'block' : 'none';
-    document.getElementById('params-stripe-dir').style.display =
-      selectedDesign === 'racing_stripes' ? 'block' : 'none';
-    document.getElementById('params-split').style.display =
-      ['split','gradient'].includes(selectedDesign) ? 'block' : 'none';
-    document.getElementById('params-feather').style.display =
-      selectedDesign === 'gradient_chevron' ? 'block' : 'none';
-    document.getElementById('params-chevron').style.display =
-      ['chevron','gradient_chevron'].includes(selectedDesign) ? 'block' : 'none';
-    document.getElementById('params-offset').style.display =
-      ['sweep','chevron','gradient_chevron','radial_gradient','number_panel'].includes(selectedDesign) ? 'block' : 'none';
-    scheduleLive();
-  });
-});
-
-// ── Car dropdown change ──
-carSelect.addEventListener('change', () => {
-  const opt = carSelect.selectedOptions[0];
-  if (opt.dataset.ready === 'true') {
-    activeCar = carSelect.value;
-    document.getElementById('template-status').textContent = `✓ Template ready (${activeCar})`;
-    document.getElementById('template-status').className = 'ok';
-    document.getElementById('btn-build').disabled = false;
-    document.getElementById('btn-vary').disabled  = false;
-    scheduleLive();
-  }
-});
-
-// ── Build ──
-document.getElementById('btn-build').addEventListener('click', () => triggerBuild(true));
-
-document.getElementById('btn-vary').addEventListener('click', async () => {
-  const designs = ['solid','racing_stripes','diagonal_stripes','sweep','gradient','chevron','split','two_tone'];
-  const angles  = [30, 45, 60];
-  document.getElementById('btn-vary').disabled = true;
-  setStatus('<span class="spinner"></span>Generating 4 variations...');
-  for (let i = 0; i < 4; i++) {
-    const p = buildPayload();
-    p.design       = designs[Math.floor(Math.random() * designs.length)];
-    p.angle        = angles[Math.floor(Math.random() * angles.length)];
-    p.stripe_width = 80 + Math.floor(Math.random() * 200);
-    try {
-      const r = await fetch('/build', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(p) });
-      const d = await r.json();
-      if (!d.error) renderResult(d.image, getCarId());
-    } catch {}
-  }
-  setStatus('Done — 4 variations generated.');
-  document.getElementById('btn-vary').disabled = false;
-});
-
-function buildPayload(carId = null) {
-  return {
-    car_id:           carId || getCarId(),
-    primary:          document.getElementById('hex-primary').value,
-    secondary:        document.getElementById('hex-secondary').value,
-    accent:           document.getElementById('hex-accent').value,
-    design:           selectedDesign,
-    angle:            document.getElementById('angle').value,
-    stripe_width:     document.getElementById('stripe-width').value,
-    split:            document.getElementById('split-pos').value / 100,
-    direction:        selectedDesign === 'racing_stripes'
-                        ? document.getElementById('stripe-dir').value
-                        : document.getElementById('split-dir').value,
-    texture:          document.getElementById('texture').value,
-    texture_opacity:  document.getElementById('texture-opacity').value / 100,
-    template_opacity: document.getElementById('template-opacity').value / 100,
-    overlay_design:   document.getElementById('overlay-design').value,
-    overlay_opacity:  document.getElementById('overlay-opacity').value / 100,
-    feather:          parseInt(document.getElementById('feather').value),
-    depth:            document.getElementById('chevron-depth').value / 100,
-    // Position sliders: 0–100 → fractions; convert to offsets for chevron/sweep, absolute for radial/number_panel
-    h_offset:         (document.getElementById('h-offset').value - 50) / 100,
-    v_offset:         (document.getElementById('v-offset').value - 50) / 100,
-    cx_frac:          document.getElementById('h-offset').value / 100,
-    cy_frac:          document.getElementById('v-offset').value / 100,
-    logo_id:          activeLogo || null,
-    logo_scale:       document.getElementById('logo-scale').value / 100,
-    logo_x:           document.getElementById('logo-x').value / 100,
-    logo_y:           document.getElementById('logo-y').value / 100,
-  };
-}
-
-async function triggerBuild(prepend) {
-  if (!activeCar) return;
-  if (prepend) {
-    document.getElementById('btn-build').disabled = true;
-    setStatus('<span class="spinner"></span>Building...');
-  }
-  try {
-    const r = await fetch('/build', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(buildPayload()) });
-    const d = await r.json();
-    if (d.error) throw new Error(d.error);
-    setStatus('');
-    renderResult(d.image, getCarId());
-  } catch(e) {
-    setStatus('Error: ' + e.message, true);
-  } finally {
-    document.getElementById('btn-build').disabled = false;
-    updateTemplateStatus();
-  }
-}
-
-function renderResult(filename, carId) {
-  const el = document.getElementById('results');
-  if (el.querySelector('p')) el.innerHTML = '';
-  const card = document.createElement('div');
-  card.className = 'result-card';
-  card.dataset.filename = filename;
-  card.dataset.carId    = carId;
-  card.innerHTML = `
-    <div class="preview-wrapper"><img src="/preview/${filename}?t=${Date.now()}" alt="Livery"></div>
-    <div class="result-footer">
-      <span class="result-label">${filename}</span>
-      <div style="display:flex;gap:6px;">
-        <button class="btn-export" onclick="exportToIRacing('${filename}','${carId}')">Export to iRacing</button>
-        <a class="btn-dl" href="/download/${filename}" download="${filename}">Download PNG</a>
-      </div>
-    </div>`;
-  el.prepend(card);
-}
-
-function setStatus(msg, isError = false) {
-  statusEl.innerHTML = msg;
-  statusEl.className = isError ? 'error' : '';
-}
-
-function updateTemplateStatus() {
-  // re-check if template still exists — no-op for now, status was set on upload
-}
-
-// ── Logo upload ──
-let activeLogo = null;
-async function uploadLogo(input) {
-  if (!input.files.length) return;
-  const carId = getCarId();
-  const form = new FormData();
-  form.append('car_id', carId);
-  form.append('file', input.files[0]);
-  setStatus('<span class="spinner"></span>Uploading logo...');
-  try {
-    const r = await fetch('/upload-logo', { method: 'POST', body: form });
-    const d = await r.json();
-    if (d.error) throw new Error(d.error);
-    activeLogo = d.logo_id;
-    document.getElementById('logo-label').textContent = `✓ ${input.files[0].name}`;
-    document.getElementById('logo-zone').classList.add('has-logo');
-    document.getElementById('logo-controls').style.display = 'block';
-    setStatus('');
-    scheduleLive();
-  } catch(e) {
-    setStatus('Logo error: ' + e.message, true);
-  }
-}
-function removeLogo() {
-  activeLogo = null;
-  document.getElementById('logo-label').textContent = 'Drop or click to upload logo (PNG with transparency)';
-  document.getElementById('logo-zone').classList.remove('has-logo');
-  document.getElementById('logo-controls').style.display = 'none';
-  scheduleLive();
-}
-
-// ── Export to iRacing ──
-async function exportToIRacing(filename, carId) {
-  const carNumber = document.getElementById('car-number').value.trim() || '0';
-  setStatus('<span class="spinner"></span>Exporting to iRacing...');
-  try {
-    const r = await fetch('/export-to-iracing', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ filename, car_id: carId, car_number: carNumber }),
-    });
-    const d = await r.json();
-    if (d.error) throw new Error(d.error + (d.expected_path ? `\nExpected: ${d.expected_path}` : ''));
-    setStatus(`✓ Exported to ${d.exported_to}`);
-  } catch(e) {
-    setStatus('Export failed: ' + e.message, true);
-  }
-}
-
-// ── Save / Load Config ──
-function saveConfig() {
-  const cfg = buildPayload();
-  cfg._design = selectedDesign;
-  const blob = new Blob([JSON.stringify(cfg, null, 2)], { type: 'application/json' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `livery_${getCarId()}_${Date.now()}.json`;
-  a.click();
-}
-function loadConfig(input) {
-  const file = input.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = e => {
-    try {
-      const cfg = JSON.parse(e.target.result);
-      if (cfg.primary)   setColor('primary',   cfg.primary);
-      if (cfg.secondary) setColor('secondary', cfg.secondary);
-      if (cfg.accent)    setColor('accent',    cfg.accent);
-      if (cfg._design || cfg.design) {
-        const d = cfg._design || cfg.design;
-        document.querySelectorAll('.design-btn').forEach(b => {
-          b.classList.toggle('active', b.dataset.design === d);
-        });
-        selectedDesign = d;
+    init() {
+      // 1. Try URL load
+      const param = new URLSearchParams(location.search).get('c');
+      if (param) {
+        try {
+          const urlCfg = JSON.parse(decodeURIComponent(escape(atob(param))));
+          Object.assign(this.config, urlCfg);
+          this.showToast('Loaded config from URL link.');
+        } catch(e) { console.error('URL config decode failed'); }
+      } else {
+        // 2. Try LocalStorage
+        const saved = localStorage.getItem('iRacingLiveryConfig');
+        if (saved) {
+          try {
+            Object.assign(this.config, JSON.parse(saved));
+          } catch(e) {}
+        }
       }
-      const set = (id, val) => { if (val !== undefined && document.getElementById(id)) document.getElementById(id).value = val; };
-      set('angle',           cfg.angle);
-      set('stripe-width',    cfg.stripe_width);
-      set('split-pos',       cfg.split !== undefined ? cfg.split * 100 : undefined);
-      set('stripe-dir',      cfg.direction);
-      set('split-dir',       cfg.direction);
-      set('texture',         cfg.texture);
-      set('texture-opacity', cfg.texture_opacity !== undefined ? cfg.texture_opacity * 100 : undefined);
-      set('template-opacity',cfg.template_opacity !== undefined ? cfg.template_opacity * 100 : undefined);
-      set('overlay-design',  cfg.overlay_design);
-      set('overlay-opacity', cfg.overlay_opacity !== undefined ? cfg.overlay_opacity * 100 : undefined);
-      set('feather',         cfg.feather);
-      set('chevron-depth',   cfg.depth !== undefined ? cfg.depth * 100 : undefined);
-      set('h-offset',        cfg.h_offset !== undefined ? cfg.h_offset * 100 : undefined);
-      scheduleLive();
-    } catch(ex) {
-      setStatus('Failed to load config: ' + ex.message, true);
-    }
-  };
-  reader.readAsText(file);
-  input.value = '';
-}
 
-// ── Color Harmony ──
-function suggestHarmony() {
-  const hex = document.getElementById('hex-primary').value;
-  const [r, g, b] = [1,3,5].map(i => parseInt(hex.slice(i, i+2), 16) / 255);
-  const max = Math.max(r,g,b), min = Math.min(r,g,b), d = max - min;
-  let h = 0;
-  if (d > 0) {
-    if (max === r) h = ((g - b) / d + 6) % 6;
-    else if (max === g) h = (b - r) / d + 2;
-    else h = (r - g) / d + 4;
-    h *= 60;
-  }
-  const s = max === 0 ? 0 : d / max;
-  const v = max;
-  function hsvToHex(hh, ss, vv) {
-    const c = vv * ss, x = c * (1 - Math.abs((hh/60) % 2 - 1)), m = vv - c;
-    let rr, gg, bb;
-    if      (hh < 60)  { rr=c; gg=x; bb=0; }
-    else if (hh < 120) { rr=x; gg=c; bb=0; }
-    else if (hh < 180) { rr=0; gg=c; bb=x; }
-    else if (hh < 240) { rr=0; gg=x; bb=c; }
-    else if (hh < 300) { rr=x; gg=0; bb=c; }
-    else               { rr=c; gg=0; bb=x; }
-    return '#' + [rr+m, gg+m, bb+m].map(v => Math.round(v*255).toString(16).padStart(2,'0')).join('');
-  }
-  setColor('secondary', hsvToHex((h + 150) % 360, Math.min(s * 1.1, 1), Math.max(v * 0.9, 0.2)));
-  setColor('accent',    hsvToHex((h + 210) % 360, Math.min(s * 0.7, 1), Math.min(v * 1.2, 1)));
-  scheduleLive();
-}
+      // Initialize Three.js scene dynamically when DOM is ready
+      this.$watch('viewMode', (val) => {
+        if (val === '3d' && !this.threeInit) this.initThreeJS();
+        if (val === '3d' && this.previewFilename) this.updateThreeTexture();
+      });
+      
+      // Material finish live updates to 3D
+      this.$watch('config.texture', () => {
+         if(this.viewMode === '3d') this.updateThreeMaterialProps();
+      });
+    },
 
-// ── URL Config Sharing ──
-function shareConfig() {
-  const cfg = buildPayload();
-  cfg._design = selectedDesign;
-  const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(cfg))));
-  const url = location.origin + location.pathname + '?c=' + encoded;
-  navigator.clipboard.writeText(url).then(
-    () => setStatus('Link copied to clipboard!'),
-    () => { prompt('Copy this link:', url); }
-  );
-}
-(function restoreFromURL() {
-  const param = new URLSearchParams(location.search).get('c');
-  if (!param) return;
-  try {
-    const cfg = JSON.parse(decodeURIComponent(escape(atob(param))));
-    // Defer until DOM is ready
-    window.addEventListener('DOMContentLoaded', () => loadConfig({ files: [new Blob([JSON.stringify(cfg)], {type:'application/json'})] }));
-    // Already past DOMContentLoaded — call inline
-    const fakeInput = { files: [{ }] };
-    if (cfg.primary) setColor('primary', cfg.primary);
-    if (cfg.secondary) setColor('secondary', cfg.secondary);
-    if (cfg.accent) setColor('accent', cfg.accent);
-    if (cfg._design || cfg.design) {
-      const d = cfg._design || cfg.design;
-      document.querySelectorAll('.design-btn').forEach(b => b.classList.toggle('active', b.dataset.design === d));
-      selectedDesign = d;
+    markChanged() {
+      // Auto-save to LocalStorage
+      localStorage.setItem('iRacingLiveryConfig', JSON.stringify(this.config));
+      
+      // Update URL silently
+      const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(this.config))));
+      const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + '?c=' + encoded;
+      window.history.replaceState({path: newUrl}, '', newUrl);
+
+      // Trigger automatic rebuild
+      if (this.activeCar) this.triggerBuild(false);
+    },
+
+    applyPreset(p, s, a) {
+      this.config.primary = p;
+      this.config.secondary = s;
+      this.config.accent = a;
+      this.markChanged();
+    },
+    
+    showToast(msg) {
+      this.toastMsg = msg;
+      clearTimeout(this.toastTimer);
+      this.toastTimer = setTimeout(() => this.toastMsg = '', 3000);
+    },
+
+    suggestHarmony() {
+      const hex = this.config.primary;
+      const [r, g, b] = [1,3,5].map(i => parseInt(hex.slice(i, i+2), 16) / 255);
+      const max = Math.max(r,g,b), min = Math.min(r,g,b), d = max - min;
+      let h = 0;
+      if (d > 0) {
+        if (max === r) h = ((g - b) / d + 6) % 6;
+        else if (max === g) h = (b - r) / d + 2;
+        else h = (r - g) / d + 4;
+        h *= 60;
+      }
+      const s = max === 0 ? 0 : d / max;
+      const v = max;
+      const hsvToHex = (hh, ss, vv) => {
+        const c = vv * ss, x = c * (1 - Math.abs((hh/60) % 2 - 1)), m = vv - c;
+        let rr=0, gg=0, bb=0;
+        if (hh<60) { rr=c; gg=x; } else if (hh<120) { rr=x; gg=c; } else if (hh<180) { gg=c; bb=x; } else if (hh<240) { gg=x; bb=c; } else if (hh<300) { rr=x; bb=c; } else { rr=c; bb=x; }
+        return '#' + [rr+m, gg+m, bb+m].map(vl => Math.round(vl*255).toString(16).padStart(2,'0')).join('');
+      };
+      this.config.secondary = hsvToHex((h + 150) % 360, Math.min(s * 1.1, 1), Math.max(v * 0.9, 0.2));
+      this.config.accent = hsvToHex((h + 210) % 360, Math.min(s * 0.7, 1), Math.min(v * 1.2, 1));
+      this.markChanged();
+    },
+
+    shareConfig() {
+      const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(this.config))));
+      const url = location.origin + location.pathname + '?c=' + encoded;
+      navigator.clipboard.writeText(url).then(
+        () => this.showToast('Shareable Link copied to clipboard!'),
+        () => prompt('Copy this link:', url)
+      );
+    },
+
+    loadConfig(file) {
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = e => {
+        try {
+          const cfg = JSON.parse(e.target.result);
+          Object.assign(this.config, cfg);
+          this.markChanged();
+          this.showToast('Config layout loaded.');
+        } catch(ex) {
+          this.statusError = true;
+          this.statusMsg = 'Failed to load JSON config.';
+        }
+      };
+      reader.readAsText(file);
+    },
+
+    getPayload() {
+      return {
+        car_id: this.activeCar || (this.config.carId !== 'custom' ? this.config.carId : 'custom'),
+        primary: this.config.primary,
+        secondary: this.config.secondary,
+        accent: this.config.accent,
+        design: this.config.design,
+        angle: this.config.angle,
+        stripe_width: this.config.stripe_width,
+        split: this.config.split / 100,
+        direction: this.config.design === 'racing_stripes' ? this.config.stripe_dir : this.config.split_dir,
+        texture: this.config.texture,
+        texture_opacity: this.config.texture_opacity / 100,
+        template_opacity: this.config.template_opacity / 100,
+        overlay_design: this.config.overlay_design,
+        overlay_opacity: this.config.overlay_opacity / 100,
+        feather: this.config.feather,
+        depth: this.config.depth / 100,
+        h_offset: (this.config.h_offset - 50) / 100,
+        v_offset: (this.config.v_offset - 50) / 100,
+        cx_frac: this.config.h_offset / 100,
+        cy_frac: this.config.v_offset / 100,
+        logo_id: this.activeLogo || null,
+        logo_scale: this.config.logo_scale / 100,
+        logo_x: this.config.logo_x / 100,
+        logo_y: this.config.logo_y / 100
+      };
+    },
+
+    async triggerBuild(isManual) {
+      if (!this.activeCar) return;
+      if (isManual) {
+        this.isBuilding = true;
+        this.statusMsg = '';
+      }
+      try {
+        const r = await fetch('/build', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(this.getPayload()) });
+        const d = await r.json();
+        if (d.error) throw new Error(d.error);
+        this.statusError = false;
+        this.previewFilename = d.image;
+        this.timestamp = Date.now();
+        if (this.viewMode === '3d') {
+            this.updateThreeTexture();
+        }
+      } catch(e) {
+        this.statusError = true;
+        this.statusMsg = 'Error: ' + e.message;
+      } finally {
+        if (isManual) this.isBuilding = false;
+      }
+    },
+
+    async uploadTemplate(file) {
+      if (!file) return;
+      this.isBuilding = true;
+      const form = new FormData();
+      form.append('car_id', this.config.carId === 'custom' ? '' : this.config.carId);
+      form.append('file', file);
+      try {
+        const r = await fetch('/upload-template', { method: 'POST', body: form });
+        const d = await r.json();
+        if (d.error) throw new Error(d.error);
+        this.activeCar = d.car_id;
+        this.templateStatus = `✓ Template ready (${this.activeCar})`;
+        this.statusError = false;
+        this.markChanged();
+      } catch(e) {
+        this.statusError = true;
+        this.templateStatus = 'Error: ' + e.message;
+      } finally {
+        this.isBuilding = false;
+      }
+    },
+
+    async uploadLogo(file) {
+      if (!file) return;
+      const form = new FormData();
+      form.append('car_id', this.activeCar || this.config.carId);
+      form.append('file', file);
+      try {
+        const r = await fetch('/upload-logo', { method: 'POST', body: form });
+        const d = await r.json();
+        if (d.error) throw new Error(d.error);
+        this.activeLogo = d.logo_id;
+        this.showToast('Logo successfully uploaded');
+        this.markChanged();
+      } catch(e) {
+        this.statusError = true;
+        this.statusMsg = 'Logo Error: ' + e.message;
+      }
+    },
+
+    removeLogo() {
+      this.activeLogo = null;
+      this.markChanged();
+    },
+
+    async exportToIRacing() {
+      this.isBuilding = true;
+      try {
+        const r = await fetch('/export-to-iracing', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filename: this.previewFilename, car_id: this.activeCar, car_number: this.config.carNumber || '0' }),
+        });
+        const d = await r.json();
+        if (d.error) throw new Error(d.error);
+        this.showToast(`✓ Exported to iRacing Directory`);
+      } catch(e) {
+        this.statusError = true;
+        this.statusMsg = 'Export failed: ' + e.message;
+      } finally {
+        this.isBuilding = false;
+      }
+    },
+
+    // --- THREE.JS LOGIC ---
+    initThreeJS() {
+      this.threeInit = true;
+      const container = this.$refs.threeCanvas;
+      
+      // Scene & Camera
+      this.threeScene = new THREE.Scene();
+      // Set to an aesthetic dark studio environment
+      this.threeScene.background = new THREE.Color(0x18181b);
+      this.threeScene.fog = new THREE.Fog(0x18181b, 2, 8);
+      
+      const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 100);
+      camera.position.set(0, 1.2, 3.5);
+
+      const renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(container.clientWidth, container.clientHeight);
+      renderer.setPixelRatio(window.devicePixelRatio);
+      container.appendChild(renderer.domElement);
+
+      const controls = new THREE.OrbitControls(camera, renderer.domElement);
+      controls.enablePan = false;
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.05;
+      controls.maxDistance = 5;
+      controls.minDistance = 1;
+
+      // Lighting - Studio Setup
+      const ambient = new THREE.AmbientLight(0xffffff, 0.4);
+      this.threeScene.add(ambient);
+      
+      const mainLight = new THREE.DirectionalLight(0xffffff, 1.2);
+      mainLight.position.set(2, 3, 4);
+      this.threeScene.add(mainLight);
+      
+      const fillLight = new THREE.PointLight(0xa5b4fc, 0.8);
+      fillLight.position.set(-3, 0, -2);
+      this.threeScene.add(fillLight);
+
+      // Decal Mesh: Create a curved plane to look like a car hood or swooping decal sheet
+      const geometry = new THREE.CylinderGeometry(2, 2, 2.5, 32, 1, false, Math.PI / 4, Math.PI / 2);
+      // Rotate completely so it faces camera correctly
+      geometry.rotateX(Math.PI / 2);
+      geometry.rotateY(Math.PI);
+      
+      this.threeMaterial = new THREE.MeshStandardMaterial({ 
+         color: 0xffffff,
+         roughness: 0.1, // Default gloss
+         metalness: 0.1,
+         side: THREE.DoubleSide
+      });
+      this.updateThreeMaterialProps();
+
+      const mesh = new THREE.Mesh(geometry, this.threeMaterial);
+      this.threeScene.add(mesh);
+
+      const animate = () => {
+        requestAnimationFrame(animate);
+        controls.update();
+        renderer.render(this.threeScene, camera);
+      };
+      
+      window.addEventListener('resize', () => {
+         if(!container) return;
+         camera.aspect = container.clientWidth / container.clientHeight;
+         camera.updateProjectionMatrix();
+         renderer.setSize(container.clientWidth, container.clientHeight);
+      });
+      
+      animate();
+    },
+
+    updateThreeTexture() {
+        if(!this.threeMaterial || !this.previewFilename) return;
+        const loader = new THREE.TextureLoader();
+        const url = '/preview/' + this.previewFilename + '?t=' + this.timestamp;
+        
+        loader.load(url, (texture) => {
+            texture.colorSpace = THREE.SRGBColorSpace || THREE.sRGBEncoding;
+            // The template is likely a standard square map, invert Y if needed
+            texture.flipY = true; 
+            this.threeMaterial.map = texture;
+            this.threeMaterial.needsUpdate = true;
+        });
+    },
+    
+    updateThreeMaterialProps() {
+        if(!this.threeMaterial) return;
+        const tex = this.config.texture;
+        
+        // Simulating physical material settings
+        if (tex === 'matte') {
+            this.threeMaterial.roughness = 0.8;
+            this.threeMaterial.metalness = 0.05;
+        } else if (tex === 'carbon_fiber') {
+            this.threeMaterial.roughness = 0.4;
+            this.threeMaterial.metalness = 0.5;
+        } else if (tex === 'brushed_metal') {
+            this.threeMaterial.roughness = 0.3;
+            this.threeMaterial.metalness = 0.8;
+        } else {
+            // clearcoat
+            this.threeMaterial.roughness = 0.05;
+            this.threeMaterial.metalness = 0.1;
+        }
+        this.threeMaterial.needsUpdate = true;
     }
-  } catch(e) { /* ignore malformed URL */ }
-})();
+    
+  }));
+});
 </script>
 </body>
 </html>
