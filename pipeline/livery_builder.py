@@ -502,17 +502,20 @@ def _overlay_logo(canvas: Image.Image, logo_path, params: dict) -> Image.Image:
     target_w = int(SIZE * scale)
     
     if p.suffix.lower() == ".svg":
-        from svglib.svglib import svg2rlg
-        from reportlab.graphics import renderPM
-        drawing = svg2rlg(str(p))
-        s_factor = target_w / drawing.width
-        drawing.width *= s_factor
-        drawing.height *= s_factor
-        drawing.scale(s_factor, s_factor)
-        buf = io.BytesIO()
-        renderPM.drawToFile(drawing, buf, fmt="PNG")
-        buf.seek(0)
-        logo = Image.open(buf).convert("RGBA")
+        try:
+            from svglib.svglib import svg2rlg
+            from reportlab.graphics import renderPM
+            drawing = svg2rlg(str(p))
+            s_factor = target_w / drawing.width
+            drawing.width *= s_factor
+            drawing.height *= s_factor
+            drawing.scale(s_factor, s_factor)
+            buf = io.BytesIO()
+            renderPM.drawToFile(drawing, buf, fmt="PNG")
+            buf.seek(0)
+            logo = Image.open(buf).convert("RGBA")
+        except ImportError:
+            return canvas  # SVG support not available; skip logo silently
     else:
         # Standard raster logo
         logo = Image.open(logo_path).convert("RGBA")
