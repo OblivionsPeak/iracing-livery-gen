@@ -610,8 +610,12 @@ document.addEventListener('alpine:init', () => {
 
       // Initialize Three.js scene dynamically when DOM is ready
       this.$watch('viewMode', (val) => {
-        if (val === '3d' && !this.threeInit) this.initThreeJS();
-        if (val === '3d' && this.previewBaked) this.updateThreeTexture();
+        if (val === '3d') {
+          this.$nextTick(() => {
+            if (!this.threeInit) this.initThreeJS();
+            if (this.previewBaked) this.updateThreeTexture();
+          });
+        }
       });
       
       // Material finish live updates to 3D
