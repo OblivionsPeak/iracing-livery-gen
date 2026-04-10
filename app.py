@@ -269,6 +269,45 @@ def build_livery():
 
 
 # ---------------------------------------------------------------------------
+# Debug
+# ---------------------------------------------------------------------------
+
+@app.route("/template-debug/<car_id>")
+def template_debug(car_id):
+    """Returns pixel stats for the uploaded template and edge mask. Useful for diagnosing wireframe issues."""
+    tmpl = TEMPLATES_DIR / car_id / "template.png"
+    edge = TEMPLATES_DIR / car_id / "edge_mask.png"
+    info = {"car_id": car_id}
+
+    if not tmpl.exists():
+        info["template"] = "NOT FOUND"
+    else:
+        from PIL import Image as _I
+        arr = np.array(_I.open(tmpl).convert("L"))
+        info["template"] = {
+            "exists": True,
+            "size": list(_I.open(tmpl).size),
+            "grey_min": int(arr.min()),
+            "grey_max": int(arr.max()),
+            "grey_mean": round(float(arr.mean()), 1),
+            "dark_pixels_pct": round(float((arr < 50).mean() * 100), 2),
+        }
+
+    if not edge.exists():
+        info["edge_mask"] = "NOT FOUND"
+    else:
+        from PIL import Image as _I2
+        earr = np.array(_I2.open(edge).convert("L"))
+        info["edge_mask"] = {
+            "exists": True,
+            "edge_pixels": int((earr > 30).sum()),
+            "max_val": int(earr.max()),
+        }
+
+    return jsonify(info)
+
+
+# ---------------------------------------------------------------------------
 
 @app.route("/preview/<filename>")
 def preview(filename):

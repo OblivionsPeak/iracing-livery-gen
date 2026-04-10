@@ -486,15 +486,23 @@ def _overlay_edge_mask(canvas: Image.Image, edge_mask_path: Path, opacity: float
     edges = np.array(em)
 
     # Amplify faint edges (Pillow FIND_EDGES fallback produces softer values)
-    edges = np.clip(edges.astype(np.int32) * 2, 0, 255).astype(np.uint8)
+    edges = np.clip(edges.astype(np.int32) * 3, 0, 255).astype(np.uint8)
 
-    edge_count = int((edges > 30).sum())
+    edge_count = int((edges > 20).sum())
     if edge_count < 100:
         return canvas, False
 
-    line_alpha = int(np.clip(opacity * 500, 0, 240))
+    # Pick contrasting edge color based on canvas brightness
+    canvas_arr = np.array(canvas.convert("RGB"), dtype=np.float32)
+    avg_brightness = canvas_arr.mean() / 255.0
+    if avg_brightness < 0.5:
+        edge_rgb = [230, 230, 230]   # light grey on dark backgrounds
+    else:
+        edge_rgb = [30, 30, 30]      # dark grey on light backgrounds
+
+    line_alpha = int(np.clip(opacity * 700, 80, 255))
     overlay = np.zeros((SIZE, SIZE, 4), dtype=np.uint8)
-    overlay[edges > 30] = [0, 0, 0, line_alpha]
+    overlay[edges > 20] = [*edge_rgb, line_alpha]
 
     result = Image.alpha_composite(
         canvas.convert("RGBA"),
@@ -570,25 +578,25 @@ def _make_logo_mask(logo_path, params: dict) -> "Image.Image | None":
 
 def _overlay_template_direct(canvas: Image.Image, template_path: Path, opacity: float) -> Image.Image:
     """
-    Multiply-blend the UV template luminance onto the canvas so panel seams
-    are always visible, regardless of whether the template has alpha or is
-    a fully opaque colored UV map.
-
-    Dark pixels in the template (panel seam lines) darken the design output;
-    mid-grey areas darken slightly; white areas leave the design untouched.
+    Blend the UV template onto the canvas using a mode that works on any
+    background brightness:
+      - Where template is DARK  → canvas is darkened (seam lines visible on light bg)
+      - Where template is LIGHT → canvas is lightened (seam lines visible on dark bg)
+    This is achieved via Pillow's built-in "hard light" composite, which applies
+    multiply for dark template pixels and screen for bright template pixels.
     """
-    tmpl_grey = np.array(
-        Image.open(template_path).convert("L").resize((SIZE, SIZE)),
-        dtype=np.float32,
-    ) / 255.0                                    # 0.0 = black seam, 1.0 = white
+    tmpl = Image.open(template_path).convert("RGB").resize((SIZE, SIZE))
+    c = np.array(canvas.convert("RGB"), dtype=np.float32) / 255.0
+    t = np.array(tmpl, dtype=np.float32) / 255.0
 
-    canvas_arr = np.array(canvas.convert("RGB"), dtype=np.float32)
+    # Hard-light: if template < 0.5 use multiply, else use screen
+    dark  = 2.0 * c * t                          # multiply for seam lines
+    light = 1.0 - 2.0 * (1.0 - c) * (1.0 - t)  # screen for bright regions
+    hard  = np.where(t < 0.5, dark, light)
 
-    # multiply factor: 1.0 where template is white (no darkening),
-    # (1 - opacity) where template is pure black (max darkening)
-    mult = 1.0 - opacity * (1.0 - tmpl_grey[:, :, np.newaxis])
-    result = (canvas_arr * mult).clip(0, 255).astype(np.uint8)
-    return Image.fromarray(result, "RGB")
+    # Blend between original and hard-light result by opacity
+    result = c + opacity * (hard - c)
+    return Image.fromarray((result.clip(0, 1) * 255).astype(np.uint8), "RGB")
 
 def _apply_grunge(canvas: Image.Image, amount: float) -> Image.Image:
     """Adds procedural dirt and rubber marks."""
