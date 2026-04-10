@@ -480,11 +480,11 @@
     <div class="view-tab" :class="{'active': viewMode === '3d'}" @click="viewMode = '3d'">3D Decal Viewer</div>
   </div>
 
-  <div id="results" class="result-card" x-show="previewBaked" x-cloak>
+    <div id="results" class="result-card" x-show="previewBaked" x-cloak>
     
     <!-- 2D View -->
     <div class="preview-wrapper" x-show="viewMode === '2d'" x-ref="twoDWrapper" style="position: relative;">
-      <img :src="'/preview/' + (previewClean || previewBaked) + '?t=' + timestamp" alt="Livery" style="width: 100%; pointer-events: none; display: block;">
+      <img :src="'/preview/' + (config.logos.some(l => l.activeDrag) ? previewClean : previewBaked) + '?t=' + timestamp" alt="Livery" style="width: 100%; pointer-events: none; display: block;">
       
       <template x-for="(logo, idx) in config.logos" :key="idx">
          <img :src="logo.url" 
@@ -548,7 +548,8 @@ document.addEventListener('alpine:init', () => {
     statusMsg: '',
     statusError: false,
     isBuilding: false,
-    (previewClean || previewBaked): null,
+    previewClean: null,
+    previewBaked: null,
     timestamp: Date.now(),
     viewMode: '2d',
     toastMsg: '',
@@ -786,7 +787,8 @@ document.addEventListener('alpine:init', () => {
         const d = await r.json();
         if (d.error) throw new Error(d.error);
         this.statusError = false;
-        this.(previewClean || previewBaked) = d.image;
+        this.previewClean = d.image_clean;
+        this.previewBaked = d.image_baked;
         this.timestamp = Date.now();
         if (this.viewMode === '3d') {
             this.updateThreeTexture();
@@ -943,7 +945,7 @@ document.addEventListener('alpine:init', () => {
     },
 
     updateThreeTexture() {
-        if(!this.threeMaterial || !this.(previewClean || previewBaked)) return;
+        if(!this.threeMaterial || !this.previewBaked) return;
         const loader = new THREE.TextureLoader();
         const url = '/preview/' + this.previewBaked + '?t=' + this.timestamp;
         
