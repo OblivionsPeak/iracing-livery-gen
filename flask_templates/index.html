@@ -100,7 +100,31 @@
   details summary { list-style: none; }
   details summary::-webkit-details-marker { display: none; }
 
-  #params-angle, #params-split, #params-feather, #params-chevron { display: none; margin-top: 6px; }
+  #params-angle, #params-split, #params-feather, #params-chevron, #params-offset { display: none; margin-top: 6px; }
+
+  .btn-row { display: flex; gap: 6px; margin-top: 8px; }
+  .btn-sm {
+    flex: 1; padding: 6px 8px; background: #1e1e1e; border: 1px solid #333;
+    border-radius: 4px; color: #777; font-size: 0.76rem; cursor: pointer;
+  }
+  .btn-sm:hover { border-color: #666; color: #bbb; }
+  .btn-sm.gold { border-color: #5a4800; color: #b08820; }
+  .btn-sm.gold:hover { border-color: #f0c040; color: #f0c040; }
+
+  .logo-zone {
+    position: relative; border: 2px dashed #2a2a2a; border-radius: 5px;
+    padding: 14px 10px; text-align: center; cursor: pointer;
+    background: #141414; font-size: 0.78rem; color: #555; transition: border-color 0.15s;
+  }
+  .logo-zone:hover { border-color: #555; }
+  .logo-zone.has-logo { border-color: #4c4; border-style: solid; color: #4c4; }
+  .logo-zone input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+
+  .btn-export {
+    padding: 6px 12px; background: #1a3a5a; color: #7ab; border: none;
+    border-radius: 4px; cursor: pointer; font-size: 0.78rem;
+  }
+  .btn-export:hover { background: #254a72; }
 
   .result-card { background: #111; border-radius: 6px; overflow: hidden; margin-bottom: 14px; }
   .result-card img { width: 100%; display: block; }
@@ -138,6 +162,11 @@
     <div id="drop-label">Drop or click to upload any car template<br><span>PNG · PSD · TGA</span></div>
   </div>
   <div id="template-status" style="margin-top:6px;"></div>
+
+  <div style="margin-top:8px;">
+    <label style="margin-top:0;">Car number <span style="color:#444;font-size:0.72rem;">(for iRacing export)</span></label>
+    <input type="text" id="car-number" value="42" maxlength="4" style="width:80px;">
+  </div>
 
   <!-- Optional: pick from known cars to set iRacing folder name for export -->
   <details style="margin-top:10px;">
@@ -184,6 +213,12 @@
     <input type="color" id="col-accent" value="#ffd700">
     <input type="text" class="color-hex" id="hex-accent" value="#ffd700" maxlength="7">
   </div>
+  <div class="btn-row" style="margin-top:10px;">
+    <button class="btn-sm gold" onclick="suggestHarmony()">Suggest Harmony</button>
+    <button class="btn-sm" onclick="saveConfig()">Save Config</button>
+    <label class="btn-sm" style="text-align:center;cursor:pointer;">Load Config<input type="file" id="config-file" accept=".json" style="display:none" onchange="loadConfig(this)"></label>
+    <button class="btn-sm" onclick="shareConfig()">Copy Link</button>
+  </div>
 
   <!-- DESIGN PATTERN -->
   <div class="section-title">Design Pattern</div>
@@ -198,6 +233,9 @@
     <div class="design-btn" data-design="two_tone">Two-Tone</div>
     <div class="design-btn" data-design="gradient_chevron">Grad. Chevron</div>
     <div class="design-btn" data-design="radial_gradient">Radial</div>
+    <div class="design-btn" data-design="harlequin">Harlequin</div>
+    <div class="design-btn" data-design="pinstripe">Pinstripe</div>
+    <div class="design-btn" data-design="number_panel">Num Panel</div>
   </div>
 
   <div id="params-angle">
@@ -253,6 +291,14 @@
     </div>
   </div>
 
+  <div id="params-offset">
+    <label>Position offset: <span id="offset-val">0</span></label>
+    <div class="slider-row">
+      <input type="range" id="h-offset" min="-30" max="30" value="0"
+        oninput="document.getElementById('offset-val').textContent=this.value; scheduleLive()">
+    </div>
+  </div>
+
   <!-- OVERLAY PATTERN -->
   <div class="section-title">Overlay Pattern</div>
   <div class="row" style="align-items:flex-end;">
@@ -270,6 +316,9 @@
         <option value="two_tone">Two-Tone</option>
         <option value="gradient_chevron">Grad. Chevron</option>
         <option value="radial_gradient">Radial</option>
+        <option value="harlequin">Harlequin</option>
+        <option value="pinstripe">Pinstripe</option>
+        <option value="number_panel">Num Panel</option>
       </select>
     </div>
     <div>
@@ -278,6 +327,31 @@
         style="width:100%;margin-top:6px;accent-color:#f0c040"
         oninput="document.getElementById('ov-val').textContent=this.value+'%'; scheduleLive()">
     </div>
+  </div>
+
+  <!-- LOGO / SPONSOR -->
+  <div class="section-title">Logo / Sponsor</div>
+  <div class="logo-zone" id="logo-zone">
+    <input type="file" id="logo-file" accept=".png,.jpg,.jpeg,.webp" onchange="uploadLogo(this)">
+    <span id="logo-label">Drop or click to upload logo (PNG with transparency)</span>
+  </div>
+  <div id="logo-controls" style="display:none;">
+    <label>Scale: <span id="logo-scale-val">20%</span></label>
+    <div class="slider-row">
+      <input type="range" id="logo-scale" min="5" max="60" value="20"
+        oninput="document.getElementById('logo-scale-val').textContent=this.value+'%'; scheduleLive()">
+    </div>
+    <label>Horizontal position: <span id="logo-x-val">50%</span></label>
+    <div class="slider-row">
+      <input type="range" id="logo-x" min="5" max="95" value="50"
+        oninput="document.getElementById('logo-x-val').textContent=this.value+'%'; scheduleLive()">
+    </div>
+    <label>Vertical position: <span id="logo-y-val">50%</span></label>
+    <div class="slider-row">
+      <input type="range" id="logo-y" min="5" max="95" value="50"
+        oninput="document.getElementById('logo-y-val').textContent=this.value+'%'; scheduleLive()">
+    </div>
+    <button class="btn-sm" style="margin-top:6px;" onclick="removeLogo()">Remove Logo</button>
   </div>
 
   <!-- FINISH -->
@@ -428,6 +502,8 @@ document.querySelectorAll('.design-btn').forEach(btn => {
       selectedDesign === 'gradient_chevron' ? 'block' : 'none';
     document.getElementById('params-chevron').style.display =
       ['chevron','gradient_chevron'].includes(selectedDesign) ? 'block' : 'none';
+    document.getElementById('params-offset').style.display =
+      ['sweep','chevron','gradient_chevron'].includes(selectedDesign) ? 'block' : 'none';
     scheduleLive();
   });
 });
@@ -488,6 +564,11 @@ function buildPayload(carId = null) {
     overlay_opacity:  document.getElementById('overlay-opacity').value / 100,
     feather:          parseInt(document.getElementById('feather').value),
     depth:            document.getElementById('chevron-depth').value / 100,
+    h_offset:         document.getElementById('h-offset').value / 100,
+    logo_id:          activeLogo || null,
+    logo_scale:       document.getElementById('logo-scale').value / 100,
+    logo_x:           document.getElementById('logo-x').value / 100,
+    logo_y:           document.getElementById('logo-y').value / 100,
   };
 }
 
@@ -513,15 +594,19 @@ async function triggerBuild(prepend) {
 
 function renderResult(filename, carId) {
   const el = document.getElementById('results');
-  // Clear placeholder text on first result
   if (el.querySelector('p')) el.innerHTML = '';
   const card = document.createElement('div');
   card.className = 'result-card';
+  card.dataset.filename = filename;
+  card.dataset.carId    = carId;
   card.innerHTML = `
     <img src="/preview/${filename}?t=${Date.now()}" alt="Livery">
     <div class="result-footer">
       <span class="result-label">${filename}</span>
-      <a class="btn-dl" href="/download/${filename}" download="${filename}">Download PNG</a>
+      <div style="display:flex;gap:6px;">
+        <button class="btn-export" onclick="exportToIRacing('${filename}','${carId}')">Export to iRacing</button>
+        <a class="btn-dl" href="/download/${filename}" download="${filename}">Download PNG</a>
+      </div>
     </div>`;
   el.prepend(card);
 }
@@ -530,6 +615,170 @@ function setStatus(msg, isError = false) {
   statusEl.innerHTML = msg;
   statusEl.className = isError ? 'error' : '';
 }
+
+function updateTemplateStatus() {
+  // re-check if template still exists — no-op for now, status was set on upload
+}
+
+// ── Logo upload ──
+let activeLogo = null;
+async function uploadLogo(input) {
+  if (!input.files.length) return;
+  const carId = getCarId();
+  const form = new FormData();
+  form.append('car_id', carId);
+  form.append('file', input.files[0]);
+  setStatus('<span class="spinner"></span>Uploading logo...');
+  try {
+    const r = await fetch('/upload-logo', { method: 'POST', body: form });
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+    activeLogo = d.logo_id;
+    document.getElementById('logo-label').textContent = `✓ ${input.files[0].name}`;
+    document.getElementById('logo-zone').classList.add('has-logo');
+    document.getElementById('logo-controls').style.display = 'block';
+    setStatus('');
+    scheduleLive();
+  } catch(e) {
+    setStatus('Logo error: ' + e.message, true);
+  }
+}
+function removeLogo() {
+  activeLogo = null;
+  document.getElementById('logo-label').textContent = 'Drop or click to upload logo (PNG with transparency)';
+  document.getElementById('logo-zone').classList.remove('has-logo');
+  document.getElementById('logo-controls').style.display = 'none';
+  scheduleLive();
+}
+
+// ── Export to iRacing ──
+async function exportToIRacing(filename, carId) {
+  const carNumber = document.getElementById('car-number').value.trim() || '0';
+  setStatus('<span class="spinner"></span>Exporting to iRacing...');
+  try {
+    const r = await fetch('/export-to-iracing', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ filename, car_id: carId, car_number: carNumber }),
+    });
+    const d = await r.json();
+    if (d.error) throw new Error(d.error + (d.expected_path ? `\nExpected: ${d.expected_path}` : ''));
+    setStatus(`✓ Exported to ${d.exported_to}`);
+  } catch(e) {
+    setStatus('Export failed: ' + e.message, true);
+  }
+}
+
+// ── Save / Load Config ──
+function saveConfig() {
+  const cfg = buildPayload();
+  cfg._design = selectedDesign;
+  const blob = new Blob([JSON.stringify(cfg, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `livery_${getCarId()}_${Date.now()}.json`;
+  a.click();
+}
+function loadConfig(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const cfg = JSON.parse(e.target.result);
+      if (cfg.primary)   setColor('primary',   cfg.primary);
+      if (cfg.secondary) setColor('secondary', cfg.secondary);
+      if (cfg.accent)    setColor('accent',    cfg.accent);
+      if (cfg._design || cfg.design) {
+        const d = cfg._design || cfg.design;
+        document.querySelectorAll('.design-btn').forEach(b => {
+          b.classList.toggle('active', b.dataset.design === d);
+        });
+        selectedDesign = d;
+      }
+      const set = (id, val) => { if (val !== undefined && document.getElementById(id)) document.getElementById(id).value = val; };
+      set('angle',           cfg.angle);
+      set('stripe-width',    cfg.stripe_width);
+      set('split-pos',       cfg.split !== undefined ? cfg.split * 100 : undefined);
+      set('stripe-dir',      cfg.direction);
+      set('split-dir',       cfg.direction);
+      set('texture',         cfg.texture);
+      set('texture-opacity', cfg.texture_opacity !== undefined ? cfg.texture_opacity * 100 : undefined);
+      set('template-opacity',cfg.template_opacity !== undefined ? cfg.template_opacity * 100 : undefined);
+      set('overlay-design',  cfg.overlay_design);
+      set('overlay-opacity', cfg.overlay_opacity !== undefined ? cfg.overlay_opacity * 100 : undefined);
+      set('feather',         cfg.feather);
+      set('chevron-depth',   cfg.depth !== undefined ? cfg.depth * 100 : undefined);
+      set('h-offset',        cfg.h_offset !== undefined ? cfg.h_offset * 100 : undefined);
+      scheduleLive();
+    } catch(ex) {
+      setStatus('Failed to load config: ' + ex.message, true);
+    }
+  };
+  reader.readAsText(file);
+  input.value = '';
+}
+
+// ── Color Harmony ──
+function suggestHarmony() {
+  const hex = document.getElementById('hex-primary').value;
+  const [r, g, b] = [1,3,5].map(i => parseInt(hex.slice(i, i+2), 16) / 255);
+  const max = Math.max(r,g,b), min = Math.min(r,g,b), d = max - min;
+  let h = 0;
+  if (d > 0) {
+    if (max === r) h = ((g - b) / d + 6) % 6;
+    else if (max === g) h = (b - r) / d + 2;
+    else h = (r - g) / d + 4;
+    h *= 60;
+  }
+  const s = max === 0 ? 0 : d / max;
+  const v = max;
+  function hsvToHex(hh, ss, vv) {
+    const c = vv * ss, x = c * (1 - Math.abs((hh/60) % 2 - 1)), m = vv - c;
+    let rr, gg, bb;
+    if      (hh < 60)  { rr=c; gg=x; bb=0; }
+    else if (hh < 120) { rr=x; gg=c; bb=0; }
+    else if (hh < 180) { rr=0; gg=c; bb=x; }
+    else if (hh < 240) { rr=0; gg=x; bb=c; }
+    else if (hh < 300) { rr=x; gg=0; bb=c; }
+    else               { rr=c; gg=0; bb=x; }
+    return '#' + [rr+m, gg+m, bb+m].map(v => Math.round(v*255).toString(16).padStart(2,'0')).join('');
+  }
+  setColor('secondary', hsvToHex((h + 150) % 360, Math.min(s * 1.1, 1), Math.max(v * 0.9, 0.2)));
+  setColor('accent',    hsvToHex((h + 210) % 360, Math.min(s * 0.7, 1), Math.min(v * 1.2, 1)));
+  scheduleLive();
+}
+
+// ── URL Config Sharing ──
+function shareConfig() {
+  const cfg = buildPayload();
+  cfg._design = selectedDesign;
+  const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(cfg))));
+  const url = location.origin + location.pathname + '?c=' + encoded;
+  navigator.clipboard.writeText(url).then(
+    () => setStatus('Link copied to clipboard!'),
+    () => { prompt('Copy this link:', url); }
+  );
+}
+(function restoreFromURL() {
+  const param = new URLSearchParams(location.search).get('c');
+  if (!param) return;
+  try {
+    const cfg = JSON.parse(decodeURIComponent(escape(atob(param))));
+    // Defer until DOM is ready
+    window.addEventListener('DOMContentLoaded', () => loadConfig({ files: [new Blob([JSON.stringify(cfg)], {type:'application/json'})] }));
+    // Already past DOMContentLoaded — call inline
+    const fakeInput = { files: [{ }] };
+    if (cfg.primary) setColor('primary', cfg.primary);
+    if (cfg.secondary) setColor('secondary', cfg.secondary);
+    if (cfg.accent) setColor('accent', cfg.accent);
+    if (cfg._design || cfg.design) {
+      const d = cfg._design || cfg.design;
+      document.querySelectorAll('.design-btn').forEach(b => b.classList.toggle('active', b.dataset.design === d));
+      selectedDesign = d;
+    }
+  } catch(e) { /* ignore malformed URL */ }
+})();
 </script>
 </body>
 </html>

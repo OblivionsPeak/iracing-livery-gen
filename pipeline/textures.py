@@ -22,20 +22,23 @@ def generate_texture(name: str, size: int = SIZE) -> Image.Image:
 
 
 def _carbon_fiber(size: int) -> Image.Image:
-    """2x2 woven carbon fiber pattern tiled across the canvas."""
+    """2x2 woven carbon fiber pattern tiled across the canvas (NumPy vectorised)."""
     tile = 12  # pixel size of one weave cell
-    arr = np.zeros((size, size), dtype=np.uint8)
 
-    for y in range(size):
-        for x in range(size):
-            cx, cy = x // tile, y // tile
-            tx, ty = x % tile, y % tile
-            # Alternate horizontal / vertical highlight
-            if (cx + cy) % 2 == 0:
-                brightness = int(30 + 40 * (ty / tile))
-            else:
-                brightness = int(30 + 40 * (tx / tile))
-            arr[y, x] = brightness
+    # Build full coordinate grids in one shot
+    y_idx, x_idx = np.mgrid[0:size, 0:size]
+
+    cx = x_idx // tile   # cell column index
+    cy = y_idx // tile   # cell row index
+    tx = x_idx % tile    # x position within cell
+    ty = y_idx % tile    # y position within cell
+
+    # Even cells: brightness varies with ty (horizontal highlight)
+    even_bright = (30 + 40 * (ty / tile)).astype(np.float32)
+    # Odd cells: brightness varies with tx (vertical highlight)
+    odd_bright  = (30 + 40 * (tx / tile)).astype(np.float32)
+
+    arr = np.where((cx + cy) % 2 == 0, even_bright, odd_bright).astype(np.uint8)
 
     img = Image.fromarray(arr, mode="L").convert("RGB")
     # Slight blur to soften pixel edges
