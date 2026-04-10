@@ -48,15 +48,11 @@ def _carbon_fiber(size: int) -> Image.Image:
 def _brushed_metal(size: int) -> Image.Image:
     """Horizontal brushed-metal streaks."""
     rng = np.random.default_rng(42)
-    # Base: medium grey
     arr = np.full((size, size), 160, dtype=np.float32)
-    # Add horizontal noise streaks
-    for y in range(size):
-        streak = rng.normal(0, 18)
-        arr[y, :] += streak
-    # Fine horizontal grain
-    grain = rng.normal(0, 6, (size, size))
-    arr += grain
+    # Vectorised: generate all per-row streaks at once and broadcast across columns
+    streaks = rng.normal(0, 18, (size, 1))
+    arr += streaks
+    arr += rng.normal(0, 6, (size, size))
     arr = np.clip(arr, 60, 220).astype(np.uint8)
     return Image.fromarray(arr, mode="L").convert("RGB")
 
