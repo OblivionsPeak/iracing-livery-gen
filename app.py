@@ -121,9 +121,8 @@ def upload_template():
         
         # PRE-COMPUTE EDGE MASK FOR RENDERING Loop
         grey = np.array(pil_img.convert("L"))
-        edges = cv2.Canny(grey, 25, 90)
-        kernel = np.ones((2, 2), np.uint8)
-        edges = cv2.dilate(edges, kernel, iterations=1)
+        # High thresholds ensure we only catch the sharpest seam lines, not logos
+        edges = cv2.Canny(grey, 100, 200)
         
         mask = np.zeros((grey.shape[0], grey.shape[1], 4), dtype=np.uint8)
         mask[edges > 0] = [255, 255, 255, 255]

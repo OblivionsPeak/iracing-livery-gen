@@ -891,9 +891,15 @@ document.addEventListener('alpine:init', () => {
       const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 100);
       camera.position.set(0, 1.2, 3.5);
 
-      const renderer = new THREE.WebGLRenderer({ antialias: true });
-      renderer.setSize(container.clientWidth, container.clientHeight);
-      renderer.setPixelRatio(window.devicePixelRatio);
+      const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+      const width = container.clientWidth || 600;
+      const height = container.clientHeight || 600;
+      renderer.setSize(width, height);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.setClearColor(0x18181b, 1);
+      
+      // Clear container and append (defensive against hot reloads or duplicates)
+      container.innerHTML = '';
       container.appendChild(renderer.domElement);
 
       const controls = new THREE.OrbitControls(camera, renderer.domElement);
@@ -916,10 +922,11 @@ document.addEventListener('alpine:init', () => {
       this.threeScene.add(fillLight);
 
       // Decal Mesh: Create a curved plane to look like a car hood or swooping decal sheet
-      const geometry = new THREE.CylinderGeometry(2, 2, 2.5, 32, 1, false, Math.PI / 4, Math.PI / 2);
+      const geometry = new THREE.CylinderGeometry(2, 2, 2.8, 48, 1, true, Math.PI / 4, Math.PI / 2);
       // Rotate completely so it faces camera correctly
       geometry.rotateX(Math.PI / 2);
       geometry.rotateY(Math.PI);
+      geometry.center();
       
       this.threeMaterial = new THREE.MeshStandardMaterial({ 
          color: 0xffffff,
