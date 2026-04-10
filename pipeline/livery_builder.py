@@ -18,9 +18,6 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFilter
 
 # Vector support
-from svglib.svglib import svg2rlg
-from reportlab.graphics import renderPM
-
 SIZE = 2048
 
 def _get_noise(size, scale=100.0):
@@ -505,15 +502,13 @@ def _overlay_logo(canvas: Image.Image, logo_path, params: dict) -> Image.Image:
     target_w = int(SIZE * scale)
     
     if p.suffix.lower() == ".svg":
-        # Handle SVG via svglib -> reportlab -> PIL
+        from svglib.svglib import svg2rlg
+        from reportlab.graphics import renderPM
         drawing = svg2rlg(str(p))
-        # Scale the drawing to the target width
         s_factor = target_w / drawing.width
         drawing.width *= s_factor
         drawing.height *= s_factor
         drawing.scale(s_factor, s_factor)
-        
-        # Render to buffer
         buf = io.BytesIO()
         renderPM.drawToFile(drawing, buf, fmt="PNG")
         buf.seek(0)

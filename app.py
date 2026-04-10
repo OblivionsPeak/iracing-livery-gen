@@ -181,8 +181,6 @@ def upload_logo():
 
 @app.route("/build", methods=["POST"])
 def build_livery():
-    from pipeline.livery_builder import build, hex_to_rgb
-
     data    = request.json
     car_id  = data.get("car_id")
     # Comprehensive log of incoming configuration
@@ -231,6 +229,7 @@ def build_livery():
         })
 
     try:
+        from pipeline.livery_builder import build, hex_to_rgb
         img_clean, img_baked, spec_map = build(
             template_path    = tmpl,
             primary          = hex_to_rgb(data.get("primary",   "#1a1a2e")),
