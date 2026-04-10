@@ -161,10 +161,12 @@ def _make_design(primary, secondary, accent, design, params) -> Image.Image:
         sp = int(SIZE * pos)
         if direction == "horizontal":
             draw.rectangle([0, sp, SIZE, SIZE], fill=secondary)
-            draw.rectangle([0, sp - 6, SIZE, sp + 6], fill=accent)
+            # Thin hint of accent
+            draw.rectangle([0, sp - 2, SIZE, sp + 2], fill=accent)
         else:
             draw.rectangle([sp, 0, SIZE, SIZE], fill=secondary)
-            draw.rectangle([sp - 6, 0, sp + 6, SIZE], fill=accent)
+            # Thin hint of accent
+            draw.rectangle([sp - 2, 0, sp + 2, SIZE], fill=accent)
 
     elif design == "chevron":
         depth    = params.get("depth", 0.35)
@@ -330,8 +332,8 @@ def _draw_chevron(draw, secondary, accent, depth, h_offset=0.0, v_offset=0.0):
         (0, SIZE),
     ]
     draw.polygon(pts, fill=secondary)
-    # Accent outline
-    draw.line([(px - dy, 0), (px, half), (px - dy, SIZE)], fill=accent, width=18)
+    # Accent outline (removed thick line for cleaner look)
+    # draw.line([(px - dy, 0), (px, half), (px - dy, SIZE)], fill=accent, width=4)
 
 
 def _draw_sweep(draw, img, secondary, accent, params):
@@ -369,8 +371,8 @@ def _draw_diagonal_split(draw, secondary, accent, angle_deg):
         (0, mid + offset),
     ]
     draw.polygon(pts, fill=secondary)
-    # Accent divider line
-    draw.line([(0, mid + offset), (SIZE, mid - offset)], fill=accent, width=14)
+    # Optional: Accent divider line (removed for cleaner two_tone)
+    # draw.line([(0, mid + offset), (SIZE, mid - offset)], fill=accent, width=14)
 
 
 # ---------------------------------------------------------------------------
