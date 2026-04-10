@@ -153,6 +153,9 @@ def _make_design(primary, secondary, accent, design, params) -> Image.Image:
         direction = params.get("direction", "horizontal")
         _draw_gradient(img, primary, secondary, direction)
 
+    elif design == "radial_gradient":
+        _draw_radial_gradient(img, primary, secondary)
+
     elif design == "split":
         pos = params.get("split", 0.5)
         direction = params.get("direction", "horizontal")
@@ -235,6 +238,19 @@ def _draw_gradient(img, color1, color2, direction):
     else:
         arr[:] = band[:, None, :]
         arr = arr.transpose(1, 0, 2)
+    img.paste(Image.fromarray(arr), (0, 0))
+
+
+def _draw_radial_gradient(img, color1, color2):
+    """Circular gradient: color1 at centre, color2 at corners."""
+    c1 = np.array(color1, dtype=float)
+    c2 = np.array(color2, dtype=float)
+    half = SIZE / 2.0
+    # Build normalized distance grid (0 = centre, 1 = corner)
+    y, x = np.mgrid[0:SIZE, 0:SIZE]
+    dist = np.sqrt(((x - half) / half) ** 2 + ((y - half) / half) ** 2)
+    t = np.clip(dist, 0, 1)[..., None]          # shape (SIZE, SIZE, 1)
+    arr = (c1 * (1 - t) + c2 * t).astype(np.uint8)
     img.paste(Image.fromarray(arr), (0, 0))
 
 
