@@ -118,21 +118,26 @@ def upload_template():
         
         pil_img.save(template_path)
 
-        # Build edge mask so panel seams show through the livery
+        # Build edge mask so panel seams show through the livery.
+        # Flatten RGBA onto white first so transparent areas contrast with
+        # dark/coloured panel lines (otherwise RGBA→L loses the edges).
+        from PIL import Image as _PILEdge
+        flat = _PILEdge.new("RGB", pil_img.size, (255, 255, 255))
+        flat.paste(pil_img.convert("RGBA"), mask=pil_img.split()[-1] if pil_img.mode == "RGBA" else None)
+
         try:
             import cv2 as _cv2
-            grey = np.array(pil_img.convert("L"))
+            grey = np.array(flat.convert("L"))
             kernel = np.ones((3, 3), np.uint8)
             gradient = _cv2.morphologyEx(grey, _cv2.MORPH_GRADIENT, kernel)
-            _, mask_binary = _cv2.threshold(gradient, 40, 255, _cv2.THRESH_BINARY)
+            _, mask_binary = _cv2.threshold(gradient, 15, 255, _cv2.THRESH_BINARY)
             mask_rgba = np.zeros((grey.shape[0], grey.shape[1], 4), dtype=np.uint8)
             mask_rgba[mask_binary > 0] = [255, 255, 255, 255]
-            from PIL import Image as _PILEdge
             _PILEdge.fromarray(mask_rgba, "RGBA").save(destdir / "edge_mask.png")
         except Exception:
             # cv2 unavailable — fall back to Pillow edge filter
-            from PIL import Image as _PILEdge, ImageFilter as _IF
-            grey_img = pil_img.convert("L").filter(_IF.FIND_EDGES)
+            from PIL import ImageFilter as _IF
+            grey_img = flat.convert("L").filter(_IF.FIND_EDGES)
             edge_rgba = _PILEdge.new("RGBA", grey_img.size, (0, 0, 0, 0))
             edge_rgba.putalpha(grey_img)
             edge_rgba.save(destdir / "edge_mask.png")
