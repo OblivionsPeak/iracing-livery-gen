@@ -434,16 +434,51 @@
           </template>
 
           <!-- Design Settings -->
-          <template x-if="layer.type === 'design' && ['diagonal_stripes','racing_stripes','two_tone'].includes(layer.id)">
-             <div class="row" style="gap:10px;">
-                <div style="flex:1">
-                  <label>Angle</label>
-                  <input type="range" min="0" max="180" x-model.number="layer.params.angle" @input.debounce.300ms="markChanged()">
-                </div>
-                <div style="flex:1">
-                  <label>Stripe Width</label>
-                  <input type="range" min="40" max="400" x-model.number="layer.params.stripe_width" @input.debounce.300ms="markChanged()">
-                </div>
+          <template x-if="layer.type === 'design' && ['diagonal_stripes','racing_stripes','two_tone','tearing'].includes(layer.id)">
+             <div style="display:flex; flex-direction:column; gap:10px;">
+               <div class="row" style="gap:10px;">
+                  <div style="flex:1">
+                    <label>Angle <span class="val" x-text="(layer.params.angle || 0) + '°'"></span></label>
+                    <input type="range" min="0" max="360" x-model.number="layer.params.angle" @input.debounce.300ms="markChanged()">
+                    <div style="display:flex; gap:4px; margin-top:6px;">
+                      <button class="btn-sm" style="font-size:9px; padding:2px 4px;" @click="layer.params.angle = 0; markChanged()">0° (Snap)</button>
+                      <button class="btn-sm" style="font-size:9px; padding:2px 4px;" @click="layer.params.angle = 45; markChanged()">45°</button>
+                      <button class="btn-sm" style="font-size:9px; padding:2px 4px;" @click="layer.params.angle = 90; markChanged()">90°</button>
+                    </div>
+                  </div>
+                  <div style="flex:1">
+                    <label x-text="layer.id === 'tearing' ? 'Roughness' : 'Stripe Width'"></label>
+                    <template x-if="layer.id === 'tearing'">
+                      <input type="range" min="0" max="1" step="0.05" x-model.number="layer.params.roughness" @input.debounce.300ms="markChanged()">
+                    </template>
+                    <template x-if="layer.id !== 'tearing'">
+                      <input type="range" min="40" max="400" x-model.number="layer.params.stripe_width" @input.debounce.300ms="markChanged()">
+                    </template>
+                  </div>
+               </div>
+               
+               <template x-if="layer.id === 'tearing'">
+                 <div class="row" style="gap:10px;">
+                   <div style="flex:1">
+                     <label>Shred Density <span class="val" x-text="Math.round((layer.params.shred_density || 0.4) * 100) + '%'"></span></label>
+                     <input type="range" min="0" max="1" step="0.05" x-model.number="layer.params.shred_density" @input.debounce.300ms="markChanged()">
+                   </div>
+                   <div style="flex:1">
+                     <label>Position Shift <span class="val" x-text="(layer.params.pos_shift || 0)"></span></label>
+                     <input type="range" min="-1" max="1" step="0.05" x-model.number="layer.params.pos_shift" @input.debounce.300ms="markChanged()">
+                   </div>
+                 </div>
+               </template>
+               
+               <template x-if="layer.id === 'racing_stripes'">
+                 <div style="margin-top:5px;">
+                   <label>Orientation</label>
+                   <select x-model="layer.params.direction" @change="markChanged()">
+                     <option value="vertical">Vertical (Front-to-Back)</option>
+                     <option value="horizontal">Horizontal (Side-to-Side)</option>
+                   </select>
+                 </div>
+               </template>
              </div>
           </template>
 
@@ -588,7 +623,8 @@ const DESIGNS = [
   {id:'harlequin', name:'Harlequin', svg:'<svg><path d="M12 0l6 6-6 6-6-6z M12 12l6 6-6 6-6-6z M0 6l6 6-6 6-6-6z M24 6l-6 6-6-6 6-6z"/></svg>'},
   {id:'pinstripe', name:'Pinstripe', svg:'<svg><path d="M0 20L20 0h2L0 22zM0 10L10 0h2L0 12z" /></svg>'},
   {id:'number_panel', name:'Num Panel', svg:'<svg><rect width="24" height="24" fill="currentColor" fill-opacity="0.2"/><rect x="6" y="8" width="12" height="8" rx="1"/></svg>'},
-  {id:'shard', name:'Shard', svg:'<svg><path d="M12 2 L22 12 L12 22 L2 12 Z M12 2 L8 8 L12 14 L16 8 Z" fill="currentColor" fill-opacity="0.7"/></svg>'}
+  {id:'shard', name:'Shard', svg:'<svg><path d="M12 2 L22 12 L12 22 L2 12 Z M12 2 L8 8 L12 14 L16 8 Z" fill="currentColor" fill-opacity="0.7"/></svg>'},
+  {id:'tearing', name:'Tearing', svg:'<svg><path d="M2 12 L8 10 L6 8 L12 6 L10 12 L18 10 L16 14 L22 12 L18 20 L4 18 Z" fill="currentColor"/></svg>'}
 ];
 
 document.addEventListener('alpine:init', () => {

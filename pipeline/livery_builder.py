@@ -299,6 +299,9 @@ def _make_design(primary, secondary, accent, design, params, size=DEFAULT_SIZE) 
     elif design == "shard":
         _draw_shards(img, primary, secondary, accent, params, size=S)
 
+    elif design == "tearing":
+        _draw_tearing(img, primary, secondary, accent, params, size=S)
+
     return img
 
 
@@ -323,7 +326,7 @@ def _draw_shards(img, primary, secondary, accent, params, size=DEFAULT_SIZE):
     rng = np.random.default_rng(42)
     noise_map = rng.standard_normal((S, S)).astype(np.float32)
     noise_img = Image.fromarray(((noise_map + 3) / 6 * 255).clip(0, 255).astype(np.uint8), mode='L')
-    noise_img = noise_img.filter(ImageFilter.GaussianBlur(radius=40))
+    noise_img = noise_img.filter(ImageFilter.GaussianBlur(radius=max(1, int(40 * S / DEFAULT_SIZE))))
     noise_smooth = (np.array(noise_img, dtype=np.float32) / 255.0 - 0.5) * 2.0
 
     dist_norm = (dist / (S * 0.7)).clip(0, 1)
@@ -350,6 +353,78 @@ def _draw_shards(img, primary, secondary, accent, params, size=DEFAULT_SIZE):
     result_arr = np.array(img)
     result_arr[crack] = np.array(accent, dtype=np.uint8)
     img.paste(Image.fromarray(result_arr), (0, 0))
+
+def _draw_tearing(img, primary, secondary, accent, params, size=DEFAULT_SIZE):
+    """
+    Shredded/Tearing effect — Jagged, directional paper-tear design.
+    Uses distorted linear gradients and fragmentation.
+    """
+    S = size
+    angle_deg = params.get("angle", 45)
+    roughness = params.get("roughness", 0.5)
+    density   = params.get("shred_density", 0.4)
+    pos_shift = params.get("pos_shift", 0.0)
+
+    angle_rad = math.radians(angle_deg)
+    
+    # Coordinate grid
+    y_g, x_g = np.mgrid[0:S, 0:S]
+    
+    # Transform to directional axes
+    # u is the axis of the tear, v is the axis crossing the tear
+    u = (x_g - S/2) * math.cos(angle_rad) + (y_g - S/2) * math.sin(angle_rad)
+    v = -(x_g - S/2) * math.sin(angle_rad) + (y_g - S/2) * math.cos(angle_rad)
+    
+    # Normalize
+    v_norm = (v / (S * 0.5)) + pos_shift
+    
+    # Procedural Noise Distortion
+    rng = np.random.default_rng(24)
+    # Low freq for large tears
+    noise_lo = rng.standard_normal((S//4, S//4)).astype(np.float32)
+    noise_lo_img = Image.fromarray(((noise_lo + 3)/6 * 255).astype(np.uint8), "L").resize((S, S), Image.BICUBIC)
+    noise_lo_arr = (np.array(noise_lo_img).astype(np.float32)/255.0 - 0.5) * 0.8
+    
+    # High freq for jaggedness
+    noise_hi = rng.standard_normal((S//2, S//2)).astype(np.float32)
+    noise_hi_img = Image.fromarray(((noise_hi + 3)/6 * 255).astype(np.uint8), "L").resize((S, S), Image.BILINEAR)
+    noise_hi_arr = (np.array(noise_hi_img).astype(np.float32)/255.0 - 0.5) * 0.3
+    
+    # Distorted boundary
+    distorted_v = v_norm + (noise_lo_arr + noise_hi_arr) * roughness
+    
+    # Main Tear Mask
+    is_sec = distorted_v > 0
+    
+    # Shredded Fragments (Micro-shreds)
+    # Stretched noise along U axis
+    shred_noise_map = rng.standard_normal((S//8, S//2)).astype(np.float32)
+    shred_noise_img = Image.fromarray(((shred_noise_map + 3)/6 * 255).astype(np.uint8), "L").resize((S, S), Image.NEAREST)
+    shred_noise = np.array(shred_noise_img).astype(np.float32)/255.0
+    
+    # Mask of fragments: near the boundary where shred_noise is high
+    dist_to_edge = np.abs(distorted_v)
+    fragment_mask = (shred_noise > (1.0 - density)) & (dist_to_edge < 0.25)
+    
+    # Combine
+    is_sec |= fragment_mask
+    
+    c1 = np.array(primary, dtype=np.uint8)
+    c2 = np.array(secondary, dtype=np.uint8)
+    res = np.where(is_sec[..., None], c2, c1).astype(np.uint8)
+    img.paste(Image.fromarray(res), (0, 0))
+    
+    # Accent Highlights on Tear Edges
+    edge_h = np.diff(is_sec.astype(np.int8), axis=1)
+    edge_v = np.diff(is_sec.astype(np.int8), axis=0)
+    crack = np.zeros((S, S), dtype=bool)
+    crack[:, :-1] |= edge_h != 0
+    crack[:-1, :] |= edge_v != 0
+    
+    # Thin but crisp accent line
+    arr = np.array(img)
+    arr[crack] = np.array(accent, dtype=np.uint8)
+    img.paste(Image.fromarray(arr), (0, 0))
 
 
 def _draw_diagonal_stripes(draw, color, angle_deg, stripe_width, offset_fraction=0.0, size=DEFAULT_SIZE):
