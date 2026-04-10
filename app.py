@@ -10,6 +10,8 @@ import json
 import os
 import time
 import io
+import json
+import zipfile
 import collections
 from pathlib import Path
 
@@ -305,8 +307,6 @@ def template_debug(car_id):
         }
 
     return jsonify(info)
-
-
 # ---------------------------------------------------------------------------
 
 @app.route("/preview/<filename>")
@@ -332,25 +332,82 @@ def download(filename):
 # iRacing export
 # ---------------------------------------------------------------------------
 
+@app.route("/export-tga", methods=["POST"])
+def export_tga():
+    """Generates a ZIP with TGA files for manual iRacing deployment."""
+    from PIL import Image
+    data = request.json
+    layers = data.get("layers", [])
+    car_id = data.get("car_id", "custom")
+    customer_id = str(data.get("customer_id", "42")).strip()
+    
+    # 1. Re-run build to get clean and spec buffers
+    # (In a production app we'd pull from cache, but building is fast)
+    from pipeline.livery_builder import build, hex_to_rgb
+    tmpl = TEMPLATES_DIR / car_id / "template.png"
+    
+    img_clean, _, spec_map = build(
+        template_path = tmpl,
+        primary = hex_to_rgb(data.get("primary", "#1a1a2e")),
+        secondary = hex_to_rgb(data.get("secondary", "#e63946")),
+        accent = hex_to_rgb(data.get("accent", "#ffd700")),
+        layers = layers,
+        texture = data.get("texture", "none"),
+        texture_opacity = float(data.get("texture_opacity", 0.25)),
+        template_opacity = 0, # FORCE NO WIREFRAMES FOR TGA
+        grunge_amount = float(data.get("grunge_amount", 0.0))
+    )
+
+    # 2. Package into ZIP
+    zip_buf = io.BytesIO()
+    with zipfile.ZipFile(zip_buf, "w") as zf:
+        # iRacing expects .tga files. PIL handles this.
+        # Main Livery
+        main_tga = io.BytesIO()
+        img_clean.save(main_tga, format="TGA")
+        zf.writestr(f"car_{customer_id}.tga", main_tga.getvalue())
+        
+        # Spec Map
+        spec_tga = io.BytesIO()
+        spec_map.save(spec_tga, format="TGA")
+        zf.writestr(f"car_spec_{customer_id}.tga", spec_tga.getvalue())
+
+    zip_buf.seek(0)
+    return send_file(
+        zip_buf,
+        mimetype="application/zip",
+        as_attachment=True,
+        download_name=f"iracing_liveries_{customer_id}.zip"
+    )
+
+
 @app.route("/export-to-iracing", methods=["POST"])
 def export_to_iracing():
     data = request.json
-    filename   = data.get("filename", "")
+    filename   = data.get("filename", "") # This should ideally be the _clean version
     car_id     = data.get("car_id", "")
     car_number = str(data.get("car_number", "0")).strip().lstrip("0") or "0"
 
-    if filename not in PREVIEW_CACHE:
+    # FORCE USE CLEAN BUFFER IF POSSIBLE
+    clean_filename = filename.replace("_baked.png", "_clean.png")
+    target_file = clean_filename if clean_filename in PREVIEW_CACHE else filename
+
+    if target_file not in PREVIEW_CACHE:
         return jsonify({"error": "Preview RAM stream not found"}), 404
 
     paint_dir = Path.home() / "Documents" / "iRacing" / "paint" / car_id
     if not paint_dir.exists():
-        return jsonify({
-            "error": "iRacing paint folder not found",
-            "expected_path": str(paint_dir)
-        }), 404
+        # Fallback to current dir if iRacing path is missing (for local dev testing)
+        paint_dir = Path("exports") / car_id
+        paint_dir.mkdir(parents=True, exist_ok=True)
 
-    dest = paint_dir / f"car_{car_number}.png"
-    dest.write_bytes(PREVIEW_CACHE[filename])
+    dest = paint_dir / f"car_{car_number}.tga" # Save as TGA for iRacing
+    
+    # Convert PNG bytes from cache to TGA using PIL
+    from PIL import Image
+    img = Image.open(io.BytesIO(PREVIEW_CACHE[target_file]))
+    img.save(dest, format="TGA")
+    
     return jsonify({"status": "ok", "exported_to": str(dest)})
 
 

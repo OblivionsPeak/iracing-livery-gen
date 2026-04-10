@@ -478,7 +478,7 @@
   </div>
 
   <div class="row" style="margin-top: 30px;">
-     <button class="btn gold w-full" style="padding:15px; font-weight:700;" @click="exportiRacing()">Download iRacing TGAs (ZIP)</button>
+     <button class="btn gold w-full" style="padding:15px; font-weight:700;" @click="exportiRacingZIP()">Download iRacing TGAs (ZIP)</button>
   </div>
   
   <div class="section-title" style="margin-top: 20px;">Add Decal</div>
@@ -551,7 +551,7 @@
     <div class="result-footer">
       <span class="result-label" x-text="previewBaked"></span>
       <div style="display:flex;gap:6px;">
-        <button class="btn-export" @click="exportiRacing()">Export to iRacing</button>
+        <button class="btn-export" @click="exportiRacingDirect()">Export to iRacing</button>
         <a class="btn-dl" :href="'/download/' + previewBaked" :download="previewBaked">Download PNG</a>
       </div>
     </div>
@@ -984,7 +984,7 @@ document.addEventListener('alpine:init', () => {
       this.markChanged();
     },
 
-    async exportiRacing() {
+    async exportiRacingZIP() {
       this.isBuilding = true;
       try {
         const r = await fetch('/export-tga', { 
@@ -992,17 +992,43 @@ document.addEventListener('alpine:init', () => {
            headers: {'Content-Type':'application/json'},
            body: JSON.stringify(this.getPayload()) 
         });
-        if (!r.ok) throw new Error('Export failed. Make sure you have rendered at least once.');
+        if (!r.ok) throw new Error('Export failed.');
         const blob = await r.blob();
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `iracing_livery_${this.config.customerId || '42'}.zip`;
+        a.download = `iracing_${this.config.carId}_${this.config.carNumber}.zip`;
         a.click();
-        this.showToast('✓ iRacing TGAs ready (ZIP)');
+        this.showToast('✓ ZIP Export Complete');
       } catch(e) {
         this.statusError = true;
         this.statusMsg = 'Export failed: ' + e.message;
+      } finally {
+        this.isBuilding = false;
+      }
+    },
+
+    async exportiRacingDirect() {
+      if (!this.previewBaked) {
+          alert("Please generate a livery first.");
+          return;
+      }
+      this.isBuilding = true;
+      try {
+        const r = await fetch('/export-to-iracing', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+              car_id: this.config.carId !== 'custom' ? this.config.carId : this.activeCar,
+              car_number: this.config.carNumber,
+              filename: this.previewBaked
+          })
+        });
+        const d = await r.json();
+        if (d.error) throw new Error(d.error);
+        this.showToast('✓ Exported to iRacing paint folder');
+      } catch(e) {
+        alert('Direct export failed: ' + e.message);
       } finally {
         this.isBuilding = false;
       }
