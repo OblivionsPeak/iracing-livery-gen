@@ -292,10 +292,15 @@
   </div>
 
   <div id="params-offset">
-    <label>Position offset: <span id="offset-val">0</span></label>
+    <label>Horizontal position: <span id="offset-x-val">50%</span></label>
     <div class="slider-row">
-      <input type="range" id="h-offset" min="-30" max="30" value="0"
-        oninput="document.getElementById('offset-val').textContent=this.value; scheduleLive()">
+      <input type="range" id="h-offset" min="10" max="90" value="50"
+        oninput="document.getElementById('offset-x-val').textContent=this.value+'%'; scheduleLive()">
+    </div>
+    <label>Vertical position: <span id="offset-y-val">50%</span></label>
+    <div class="slider-row">
+      <input type="range" id="v-offset" min="10" max="90" value="50"
+        oninput="document.getElementById('offset-y-val').textContent=this.value+'%'; scheduleLive()">
     </div>
   </div>
 
@@ -503,7 +508,7 @@ document.querySelectorAll('.design-btn').forEach(btn => {
     document.getElementById('params-chevron').style.display =
       ['chevron','gradient_chevron'].includes(selectedDesign) ? 'block' : 'none';
     document.getElementById('params-offset').style.display =
-      ['sweep','chevron','gradient_chevron'].includes(selectedDesign) ? 'block' : 'none';
+      ['sweep','chevron','gradient_chevron','radial_gradient','number_panel'].includes(selectedDesign) ? 'block' : 'none';
     scheduleLive();
   });
 });
@@ -564,7 +569,11 @@ function buildPayload(carId = null) {
     overlay_opacity:  document.getElementById('overlay-opacity').value / 100,
     feather:          parseInt(document.getElementById('feather').value),
     depth:            document.getElementById('chevron-depth').value / 100,
-    h_offset:         document.getElementById('h-offset').value / 100,
+    // Position sliders: 0–100 → fractions; convert to offsets for chevron/sweep, absolute for radial/number_panel
+    h_offset:         (document.getElementById('h-offset').value - 50) / 100,
+    v_offset:         (document.getElementById('v-offset').value - 50) / 100,
+    cx_frac:          document.getElementById('h-offset').value / 100,
+    cy_frac:          document.getElementById('v-offset').value / 100,
     logo_id:          activeLogo || null,
     logo_scale:       document.getElementById('logo-scale').value / 100,
     logo_x:           document.getElementById('logo-x').value / 100,

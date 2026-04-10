@@ -160,7 +160,9 @@ def _make_design(primary, secondary, accent, design, params) -> Image.Image:
         _draw_gradient(img, primary, secondary, direction)
 
     elif design == "radial_gradient":
-        _draw_radial_gradient(img, primary, secondary)
+        cx = params.get("cx_frac", 0.5)
+        cy = params.get("cy_frac", 0.5)
+        _draw_radial_gradient(img, primary, secondary, cx, cy)
 
     elif design == "split":
         pos = params.get("split", 0.5)
@@ -174,9 +176,10 @@ def _make_design(primary, secondary, accent, design, params) -> Image.Image:
             draw.rectangle([sp - 6, 0, sp + 6, SIZE], fill=accent)
 
     elif design == "chevron":
-        depth = params.get("depth", 0.35)
+        depth    = params.get("depth", 0.35)
         h_offset = params.get("h_offset", 0.0)
-        _draw_chevron(draw, secondary, accent, depth, h_offset)
+        v_offset = params.get("v_offset", 0.0)
+        _draw_chevron(draw, secondary, accent, depth, h_offset, v_offset)
 
     elif design == "sweep":
         _draw_sweep(draw, img, secondary, accent, params)
@@ -191,8 +194,9 @@ def _make_design(primary, secondary, accent, design, params) -> Image.Image:
         depth    = params.get("depth", 0.35)
         feather  = int(params.get("feather", 60))   # 0 = hard edge, 60+ = soft fade
         h_offset = params.get("h_offset", 0.0)
+        v_offset = params.get("v_offset", 0.0)
         px_   = int(SIZE * (0.55 + h_offset))
-        half  = SIZE // 2
+        half  = int(SIZE * (0.5 + v_offset))
         dy    = int(SIZE * depth)
         # Build a gradient layer
         grad = Image.new("RGB", (SIZE, SIZE), primary)
@@ -246,10 +250,12 @@ def _make_design(primary, secondary, accent, design, params) -> Image.Image:
 
     elif design == "number_panel":
         # High-contrast rectangle zone for the race number (GT endurance style)
-        x0 = int(SIZE * 0.35)
-        y0 = int(SIZE * 0.30)
-        x1 = int(SIZE * 0.65)
-        y1 = int(SIZE * 0.70)
+        cx = params.get("cx_frac", 0.5)
+        cy = params.get("cy_frac", 0.5)
+        x0 = int(SIZE * (cx - 0.15))
+        y0 = int(SIZE * (cy - 0.20))
+        x1 = int(SIZE * (cx + 0.15))
+        y1 = int(SIZE * (cy + 0.20))
         border_w = 12
         trim_h = 8
         trim_gap = 20
@@ -306,22 +312,23 @@ def _draw_gradient(img, color1, color2, direction):
     img.paste(Image.fromarray(arr), (0, 0))
 
 
-def _draw_radial_gradient(img, color1, color2):
-    """Circular gradient: color1 at centre, color2 at corners."""
+def _draw_radial_gradient(img, color1, color2, cx_frac=0.5, cy_frac=0.5):
+    """Circular gradient: color1 at (cx_frac, cy_frac), color2 at radius=1."""
     c1 = np.array(color1, dtype=float)
     c2 = np.array(color2, dtype=float)
-    half = SIZE / 2.0
-    # Build normalized distance grid (0 = centre, 1 = corner)
+    cx = SIZE * cx_frac
+    cy = SIZE * cy_frac
+    half = SIZE / 2.0          # normalisation radius stays fixed so scale is consistent
     y, x = np.mgrid[0:SIZE, 0:SIZE]
-    dist = np.sqrt(((x - half) / half) ** 2 + ((y - half) / half) ** 2)
-    t = np.clip(dist, 0, 1)[..., None]          # shape (SIZE, SIZE, 1)
+    dist = np.sqrt(((x - cx) / half) ** 2 + ((y - cy) / half) ** 2)
+    t = np.clip(dist, 0, 1)[..., None]
     arr = (c1 * (1 - t) + c2 * t).astype(np.uint8)
     img.paste(Image.fromarray(arr), (0, 0))
 
 
-def _draw_chevron(draw, secondary, accent, depth, h_offset=0.0):
+def _draw_chevron(draw, secondary, accent, depth, h_offset=0.0, v_offset=0.0):
     px = int(SIZE * (0.55 + h_offset))
-    half = SIZE // 2
+    half = int(SIZE * (0.5 + v_offset))
     dy = int(SIZE * depth)
     # Secondary region (left/front of chevron)
     pts = [

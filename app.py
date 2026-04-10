@@ -182,6 +182,9 @@ def build_livery():
     template_opacity = _clamp(data.get("template_opacity", 0.35), 0.0, 1.0, 0.35)
     overlay_opacity  = _clamp(data.get("overlay_opacity", 0.4), 0.0, 1.0, 0.4)
     h_offset         = _clamp(data.get("h_offset", 0.0), -0.4, 0.4, 0.0)
+    v_offset         = _clamp(data.get("v_offset", 0.0), -0.4, 0.4, 0.0)
+    cx_frac          = _clamp(data.get("cx_frac",  0.5),  0.1, 0.9, 0.5)
+    cy_frac          = _clamp(data.get("cy_frac",  0.5),  0.1, 0.9, 0.5)
 
     # Logo params
     logo_id   = data.get("logo_id")
@@ -203,6 +206,9 @@ def build_livery():
                 "depth":        depth,
                 "feather":      feather,
                 "h_offset":     h_offset,
+                "v_offset":     v_offset,
+                "cx_frac":      cx_frac,
+                "cy_frac":      cy_frac,
             },
             texture          = data.get("texture", "none"),
             texture_opacity  = texture_opacity,
