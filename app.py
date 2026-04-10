@@ -182,6 +182,9 @@ def build_livery():
 
     data    = request.json
     car_id  = data.get("car_id")
+    design  = data.get("design", "solid")
+    overlay = data.get("overlay_design", "none")
+    print(f"DEBUG BUILD: car={car_id} design={design} overlay={overlay}")
     if not car_id:
         return jsonify({"error": "car_id required"}), 400
 

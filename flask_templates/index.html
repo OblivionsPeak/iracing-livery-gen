@@ -343,6 +343,7 @@
   
   <div class="btn-row">
     <button class="btn-sm gold" @click="suggestHarmony()">Auto-Harmony</button>
+    <button class="btn-sm" @click="resetConfig()">Reset Design</button>
     <label class="btn-sm" style="display:flex;align-items:center;justify-content:center;margin:0;cursor:pointer;">Load JSON<input type="file" accept=".json" style="display:none" @change="loadConfig($event.target.files[0])"></label>
     <button class="btn-sm" @click="shareConfig()">Copy URL Link</button>
   </div>
@@ -638,6 +639,7 @@ document.addEventListener('alpine:init', () => {
       
       // Auto-save to LocalStorage
       localStorage.setItem('iRacingLiveryConfig', JSON.stringify(this.config));
+      console.log('Sending design:', this.config.design);
       
       // Update URL silently
       const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(this.config))));
