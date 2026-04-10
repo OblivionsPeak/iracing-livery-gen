@@ -92,13 +92,13 @@ def build(
     # 4. UV Template (Panel Seams)
     canvas_clean = main_canvas.copy()
     if template_opacity > 0 and template_path.exists():
-        # Step A — always composite the raw template at low opacity so UV seam
-        # layout is guaranteed visible regardless of edge detection quality
-        main_canvas = _overlay_template_direct(main_canvas, template_path, template_opacity)
         # Step B — if Canny edge mask exists, add crisp seam lines on top
         edge_mask_path = template_path.parent / "edge_mask.png"
         if edge_mask_path.exists():
             main_canvas, _ = _overlay_edge_mask(main_canvas, edge_mask_path, template_opacity)
+        else:
+            # Fallback to direct template only if edge mask is missing
+            main_canvas = _overlay_template_direct(main_canvas, template_path, template_opacity * 0.5)
 
     # Return clean/baked visual and the one spec map
     return canvas_clean, main_canvas, spec_canvas
