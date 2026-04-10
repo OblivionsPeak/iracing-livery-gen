@@ -46,8 +46,9 @@ def build(
     canvas = _make_design(primary, secondary, accent, design, dp)
 
     # 2. Optional pattern overlay — blend a second fully-rendered design over the base
-    if overlay_design and overlay_design != "none":
-        ov_rgb   = _make_design(primary, secondary, accent, overlay_design, dp)
+    ov_name = (overlay_design or "none").lower().strip()
+    if ov_name != "none":
+        ov_rgb   = _make_design(primary, secondary, accent, ov_name, dp)
         base_arr = np.array(canvas, dtype=float)
         ov_arr   = np.array(ov_rgb, dtype=float)
         blended  = base_arr * (1.0 - overlay_opacity) + ov_arr * overlay_opacity
@@ -59,7 +60,12 @@ def build(
         tex = generate_texture(texture, SIZE)
         canvas = _blend_texture(canvas, tex, texture_opacity)
 
+    # Capture clean version (No decals)
+    # This is what's shown in the 2D editor background
+    canvas_clean = canvas.copy()
+
     # 4. Template overlay (shows panel seam lines)
+    tmpl_name = (str(template_path.parent.name))
     if template_opacity > 0:
         edge_mask_path = template_path.parent / "edge_mask.png"
         if edge_mask_path.exists():

@@ -650,6 +650,19 @@ document.addEventListener('alpine:init', () => {
       if (this.activeCar) this.triggerBuild(false);
     },
 
+    resetConfig() {
+      if(!confirm("Reset current design to solid and clear all overlays?")) return;
+      this.config.design = 'solid';
+      this.config.overlay_design = 'none';
+      this.config.texture = 'none';
+      this.config.overlay_opacity = 0;
+      this.config.template_opacity = 35;
+      this.history = []; // Clear history to prevent accidental undo to broken state
+      this.historyIndex = -1;
+      this.markChanged();
+      this.showToast("✓ Design reset to solid.");
+    },
+
     undo() {
       if (this.historyIndex > 0) {
           this.isUndoing = true;
@@ -996,5 +1009,9 @@ document.addEventListener('alpine:init', () => {
   }));
 });
 </script>
+  <div style="margin-top: 40px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 20px; font-size: 11px; color: rgba(255,255,255,0.4); text-align: center; padding-bottom: 20px;">
+    Programmatic Livery Builder Pro &copy; 2026. 
+    <a href="#" onclick="localStorage.clear(); location.reload();" style="color: #e63946; margin-left:10px;">Factory Reset (Clear Search & Cache)</a>
+  </div>
 </body>
 </html>
