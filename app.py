@@ -213,7 +213,7 @@ def build_livery():
             })
 
     try:
-        img = build(
+        img_clean, img_baked = build(
             template_path    = tmpl,
             primary          = hex_to_rgb(data.get("primary",   "#1a1a2e")),
             secondary        = hex_to_rgb(data.get("secondary", "#e63946")),
@@ -242,16 +242,22 @@ def build_livery():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-    filename = f"{car_id}_{int(time.time() * 1000)}.png"
+    base_name = f"{car_id}_{int(time.time() * 1000)}"
+    file_clean = f"{base_name}_clean.png"
+    file_baked = f"{base_name}_baked.png"
     
-    byte_io = io.BytesIO()
-    img.save(byte_io, 'PNG')
-    PREVIEW_CACHE[filename] = byte_io.getvalue()
+    io_clean, io_baked = io.BytesIO(), io.BytesIO()
+    img_clean.save(io_clean, 'PNG')
+    img_baked.save(io_baked, 'PNG')
+    
+    PREVIEW_CACHE[file_clean] = io_clean.getvalue()
+    PREVIEW_CACHE[file_baked] = io_baked.getvalue()
     
     if len(PREVIEW_CACHE) > MAX_CACHE_SIZE:
         PREVIEW_CACHE.popitem(last=False)
+        PREVIEW_CACHE.popitem(last=False)
         
-    return jsonify({"status": "ok", "image": filename})
+    return jsonify({"status": "ok", "image_clean": file_clean, "image_baked": file_baked})
 
 
 # ---------------------------------------------------------------------------

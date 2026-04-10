@@ -480,11 +480,11 @@
     <div class="view-tab" :class="{'active': viewMode === '3d'}" @click="viewMode = '3d'">3D Decal Viewer</div>
   </div>
 
-  <div id="results" class="result-card" x-show="previewFilename" x-cloak>
+  <div id="results" class="result-card" x-show="previewBaked" x-cloak>
     
     <!-- 2D View -->
     <div class="preview-wrapper" x-show="viewMode === '2d'" x-ref="twoDWrapper" style="position: relative;">
-      <img :src="'/preview/' + previewFilename + '?t=' + timestamp" alt="Livery" style="width: 100%; pointer-events: none; display: block;">
+      <img :src="'/preview/' + (previewClean || previewBaked) + '?t=' + timestamp" alt="Livery" style="width: 100%; pointer-events: none; display: block;">
       
       <template x-for="(logo, idx) in config.logos" :key="idx">
          <img :src="logo.url" 
@@ -498,15 +498,15 @@
     <div x-show="viewMode === '3d'" class="three-container" x-ref="threeCanvas"></div>
     
     <div class="result-footer">
-      <span class="result-label" x-text="previewFilename"></span>
+      <span class="result-label" x-text="previewBaked"></span>
       <div style="display:flex;gap:6px;">
         <button class="btn-export" @click="exportToIRacing()">Export to iRacing</button>
-        <a class="btn-dl" :href="'/download/' + previewFilename" :download="previewFilename">Download PNG</a>
+        <a class="btn-dl" :href="'/download/' + previewBaked" :download="previewBaked">Download PNG</a>
       </div>
     </div>
   </div>
 
-  <div class="preview-wrapper" x-show="!previewFilename" style="background: var(--bg-surface);">
+  <div class="preview-wrapper" x-show="!previewBaked" style="background: var(--bg-surface);">
      <div style="padding: 48px; text-align: center;">
        <svg style="width:48px;height:48px;fill:var(--text-muted);margin: 0 auto 16px;" viewBox="0 0 24 24"><path d="M21 3H3C2 3 1 4 1 5v14c0 1.1.9 2 2 2h18c1 0 2-.9 2-2V5c0-1.1-1-2-2-2zM5 17l3.5-4.5 2.5 3.01L14.5 11l4.5 6H5z"/></svg>
        <p style="color:var(--text-sec);font-size:0.95rem;font-weight:500;">Upload an iRacing template and click Generate.</p>
@@ -548,7 +548,7 @@ document.addEventListener('alpine:init', () => {
     statusMsg: '',
     statusError: false,
     isBuilding: false,
-    previewFilename: null,
+    (previewClean || previewBaked): null,
     timestamp: Date.now(),
     viewMode: '2d',
     toastMsg: '',
@@ -610,7 +610,7 @@ document.addEventListener('alpine:init', () => {
       // Initialize Three.js scene dynamically when DOM is ready
       this.$watch('viewMode', (val) => {
         if (val === '3d' && !this.threeInit) this.initThreeJS();
-        if (val === '3d' && this.previewFilename) this.updateThreeTexture();
+        if (val === '3d' && this.previewBaked) this.updateThreeTexture();
       });
       
       // Material finish live updates to 3D
@@ -786,7 +786,7 @@ document.addEventListener('alpine:init', () => {
         const d = await r.json();
         if (d.error) throw new Error(d.error);
         this.statusError = false;
-        this.previewFilename = d.image;
+        this.(previewClean || previewBaked) = d.image;
         this.timestamp = Date.now();
         if (this.viewMode === '3d') {
             this.updateThreeTexture();
@@ -858,7 +858,7 @@ document.addEventListener('alpine:init', () => {
         const r = await fetch('/export-to-iracing', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ filename: this.previewFilename, car_id: this.activeCar, car_number: this.config.carNumber || '0' }),
+          body: JSON.stringify({ filename: this.previewBaked, car_id: this.activeCar, car_number: this.config.carNumber || '0' }),
         });
         const d = await r.json();
         if (d.error) throw new Error(d.error);
@@ -943,9 +943,9 @@ document.addEventListener('alpine:init', () => {
     },
 
     updateThreeTexture() {
-        if(!this.threeMaterial || !this.previewFilename) return;
+        if(!this.threeMaterial || !this.(previewClean || previewBaked)) return;
         const loader = new THREE.TextureLoader();
-        const url = '/preview/' + this.previewFilename + '?t=' + this.timestamp;
+        const url = '/preview/' + this.previewBaked + '?t=' + this.timestamp;
         
         loader.load(url, (texture) => {
             texture.colorSpace = THREE.SRGBColorSpace || THREE.sRGBEncoding;

@@ -65,6 +65,8 @@ def build(
         if edge_mask_path.exists():
             canvas = _overlay_edge_mask(canvas, edge_mask_path, template_opacity)
 
+    canvas_clean = canvas.copy()
+
     # 5. Optional logo/sponsor overlay array
     if logo_params and len(logo_params) > 0:
         for logo_obj in logo_params:
@@ -72,7 +74,7 @@ def build(
             if lp and Path(lp).exists():
                 canvas = _overlay_logo(canvas, lp, logo_obj)
 
-    return canvas
+    return canvas_clean, canvas
 
 
 def hex_to_rgb(hex_color: str) -> tuple:
