@@ -569,13 +569,26 @@ def _make_logo_mask(logo_path, params: dict) -> "Image.Image | None":
 
 
 def _overlay_template_direct(canvas: Image.Image, template_path: Path, opacity: float) -> Image.Image:
-    """Composite the UV template at the given opacity to show panel seams."""
-    tmpl = Image.open(template_path).convert("RGBA").resize((SIZE, SIZE))
-    arr = np.array(tmpl, dtype=np.float32)
-    arr[:, :, 3] = (arr[:, :, 3] * opacity).clip(0, 255)
-    tmpl = Image.fromarray(arr.astype(np.uint8), "RGBA")
-    result = Image.alpha_composite(canvas.convert("RGBA"), tmpl)
-    return result.convert("RGB")
+    """
+    Multiply-blend the UV template luminance onto the canvas so panel seams
+    are always visible, regardless of whether the template has alpha or is
+    a fully opaque colored UV map.
+
+    Dark pixels in the template (panel seam lines) darken the design output;
+    mid-grey areas darken slightly; white areas leave the design untouched.
+    """
+    tmpl_grey = np.array(
+        Image.open(template_path).convert("L").resize((SIZE, SIZE)),
+        dtype=np.float32,
+    ) / 255.0                                    # 0.0 = black seam, 1.0 = white
+
+    canvas_arr = np.array(canvas.convert("RGB"), dtype=np.float32)
+
+    # multiply factor: 1.0 where template is white (no darkening),
+    # (1 - opacity) where template is pure black (max darkening)
+    mult = 1.0 - opacity * (1.0 - tmpl_grey[:, :, np.newaxis])
+    result = (canvas_arr * mult).clip(0, 255).astype(np.uint8)
+    return Image.fromarray(result, "RGB")
 
 def _apply_grunge(canvas: Image.Image, amount: float) -> Image.Image:
     """Adds procedural dirt and rubber marks."""
