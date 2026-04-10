@@ -13,7 +13,6 @@ import io
 import collections
 from pathlib import Path
 
-import cv2
 import numpy as np
 
 from flask import Flask, jsonify, render_template, request, send_file
@@ -118,21 +117,25 @@ def upload_template():
             pil_img = Image.open(raw).convert("RGBA")
         
         pil_img.save(template_path)
-        
-        # ADVANCED EDGE MASK: Use Morphological Gradient to find seams, ignoring large color blocks
-        grey = np.array(pil_img.convert("L"))
-        kernel = np.ones((3,3), np.uint8)
-        # Gradient finds the absolute difference between dilation and erosion (seams)
-        gradient = cv2.morphologyEx(grey, cv2.MORPH_GRADIENT, kernel)
-        # Sharpen and threshold to get crisp panel lines
-        _, mask_binary = cv2.threshold(gradient, 40, 255, cv2.THRESH_BINARY)
-        
-        # Final clean mask (White edges on transparent)
-        mask_rgba = np.zeros((grey.shape[0], grey.shape[1], 4), dtype=np.uint8)
-        mask_rgba[mask_binary > 0] = [255, 255, 255, 255]
-        
-        from PIL import Image
-        Image.fromarray(mask_rgba, "RGBA").save(destdir / "edge_mask.png")
+
+        # Build edge mask so panel seams show through the livery
+        try:
+            import cv2 as _cv2
+            grey = np.array(pil_img.convert("L"))
+            kernel = np.ones((3, 3), np.uint8)
+            gradient = _cv2.morphologyEx(grey, _cv2.MORPH_GRADIENT, kernel)
+            _, mask_binary = _cv2.threshold(gradient, 40, 255, _cv2.THRESH_BINARY)
+            mask_rgba = np.zeros((grey.shape[0], grey.shape[1], 4), dtype=np.uint8)
+            mask_rgba[mask_binary > 0] = [255, 255, 255, 255]
+            from PIL import Image as _PILEdge
+            _PILEdge.fromarray(mask_rgba, "RGBA").save(destdir / "edge_mask.png")
+        except Exception:
+            # cv2 unavailable — fall back to Pillow edge filter
+            from PIL import Image as _PILEdge, ImageFilter as _IF
+            grey_img = pil_img.convert("L").filter(_IF.FIND_EDGES)
+            edge_rgba = _PILEdge.new("RGBA", grey_img.size, (0, 0, 0, 0))
+            edge_rgba.putalpha(grey_img)
+            edge_rgba.save(destdir / "edge_mask.png")
 
     except Exception as e:
         return jsonify({"error": f"Could not process template: {e}"}), 500
