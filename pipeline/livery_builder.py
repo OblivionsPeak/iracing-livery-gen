@@ -59,13 +59,13 @@ def build(
         tex = generate_texture(texture, SIZE)
         canvas = _blend_texture(canvas, tex, texture_opacity)
 
-    canvas_clean = canvas.copy()
-
     # 4. Template overlay (shows panel seam lines)
     if template_opacity > 0:
         edge_mask_path = template_path.parent / "edge_mask.png"
         if edge_mask_path.exists():
             canvas = _overlay_edge_mask(canvas, edge_mask_path, template_opacity)
+
+    canvas_clean = canvas.copy()
 
     # 5. Optional logo/sponsor overlay array
     if logo_params and len(logo_params) > 0:
