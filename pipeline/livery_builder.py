@@ -476,7 +476,6 @@ def _overlay_edge_mask(canvas: Image.Image, edge_mask_path: Path, opacity: float
     """
     Overlay the pre-computed Canny edge mask (greyscale PNG, 255=edge).
     Returns (result_image, had_edges).
-    had_edges=False if the mask is blank so the caller can use a fallback.
     """
     if opacity <= 0:
         return canvas, False
@@ -485,29 +484,22 @@ def _overlay_edge_mask(canvas: Image.Image, edge_mask_path: Path, opacity: float
     em = Image.open(edge_mask_path).convert("L").resize((SIZE, SIZE))
     edges = np.array(em)
 
-    # Amplify faint edges (Pillow FIND_EDGES fallback produces softer values)
-    edges = np.clip(edges.astype(np.int32) * 3, 0, 255).astype(np.uint8)
+    # Amplify faint edges
+    edges = np.clip(edges.astype(np.int32) * 2, 0, 255).astype(np.uint8)
 
     edge_count = int((edges > 20).sum())
     if edge_count < 100:
         return canvas, False
 
-    # Pick contrasting edge color based on canvas brightness
-    canvas_arr = np.array(canvas.convert("RGB"), dtype=np.float32)
-    avg_brightness = canvas_arr.mean() / 255.0
-    if avg_brightness < 0.5:
-        edge_rgb = [230, 230, 230]   # light grey on dark backgrounds
-    else:
-        edge_rgb = [30, 30, 30]      # dark grey on light backgrounds
-
-    line_alpha = int(np.clip(opacity * 700, 80, 255))
     overlay = np.zeros((SIZE, SIZE, 4), dtype=np.uint8)
-    overlay[edges > 20] = [*edge_rgb, line_alpha]
+    # Darker/more visible lines
+    line_alpha = int(np.clip(opacity * 350, 40, 230))
+    # Any white/bright pixel in the mask is an edge line
+    overlay[edges > 80] = [0, 0, 0, line_alpha] # Solid black lines
 
-    result = Image.alpha_composite(
-        canvas.convert("RGBA"),
-        Image.fromarray(overlay, "RGBA"),
-    )
+    canvas_rgba = canvas.convert("RGBA")
+    line_layer = Image.fromarray(overlay, "RGBA")
+    result = Image.alpha_composite(canvas_rgba, line_layer)
     return result.convert("RGB"), True
 
 
