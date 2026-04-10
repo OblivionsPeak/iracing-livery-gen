@@ -118,29 +118,23 @@ def upload_template():
         
         pil_img.save(template_path)
 
-        # Build edge mask so panel seams show through the livery.
-        # Flatten RGBA onto white first so transparent areas contrast with
-        # dark/coloured panel lines (otherwise RGBA→L loses the edges).
-        from PIL import Image as _PILEdge
-        flat = _PILEdge.new("RGB", pil_img.size, (255, 255, 255))
-        flat.paste(pil_img.convert("RGBA"), mask=pil_img.split()[-1] if pil_img.mode == "RGBA" else None)
+        # Build edge mask: Canny on a white-background flatten of the template.
+        # Saved as plain greyscale (255=edge, 0=background).
+        from PIL import Image as _PILEdge, ImageFilter as _IF
+        bg = _PILEdge.new("RGBA", pil_img.size, (255, 255, 255, 255))
+        bg.alpha_composite(pil_img.convert("RGBA"))
+        flat_grey = bg.convert("L")
 
         try:
             import cv2 as _cv2
-            grey = np.array(flat.convert("L"))
-            kernel = np.ones((3, 3), np.uint8)
-            gradient = _cv2.morphologyEx(grey, _cv2.MORPH_GRADIENT, kernel)
-            _, mask_binary = _cv2.threshold(gradient, 15, 255, _cv2.THRESH_BINARY)
-            mask_rgba = np.zeros((grey.shape[0], grey.shape[1], 4), dtype=np.uint8)
-            mask_rgba[mask_binary > 0] = [255, 255, 255, 255]
-            _PILEdge.fromarray(mask_rgba, "RGBA").save(destdir / "edge_mask.png")
+            grey_np = np.array(flat_grey)
+            edges_np = _cv2.Canny(grey_np, 50, 150)
+            kernel = np.ones((2, 2), np.uint8)
+            edges_np = _cv2.dilate(edges_np, kernel, iterations=1)
+            _PILEdge.fromarray(edges_np).save(destdir / "edge_mask.png")
         except Exception:
-            # cv2 unavailable — fall back to Pillow edge filter
-            from PIL import ImageFilter as _IF
-            grey_img = flat.convert("L").filter(_IF.FIND_EDGES)
-            edge_rgba = _PILEdge.new("RGBA", grey_img.size, (0, 0, 0, 0))
-            edge_rgba.putalpha(grey_img)
-            edge_rgba.save(destdir / "edge_mask.png")
+            # cv2 unavailable — Pillow FIND_EDGES fallback
+            flat_grey.filter(_IF.FIND_EDGES).save(destdir / "edge_mask.png")
 
     except Exception as e:
         return jsonify({"error": f"Could not process template: {e}"}), 500

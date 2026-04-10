@@ -474,27 +474,32 @@ def _blend_texture(canvas: Image.Image, texture: Image.Image, opacity: float) ->
 
 def _overlay_edge_mask(canvas: Image.Image, edge_mask_path: Path, opacity: float):
     """
-    Overlay the pre-computed edge mask. Returns (result_image, had_edges).
-    had_edges=False means the mask was blank so the caller should use a fallback.
+    Overlay the pre-computed Canny edge mask (greyscale PNG, 255=edge).
+    Returns (result_image, had_edges).
+    had_edges=False if the mask is blank so the caller can use a fallback.
     """
     if opacity <= 0:
         return canvas, False
 
-    em = Image.open(edge_mask_path).convert("RGBA").resize((SIZE, SIZE))
-    em_arr = np.array(em)
-    edges = em_arr[:, :, 3]  # alpha channel: 255 = edge, 0 = background
+    # Edge mask is greyscale: bright pixels are panel seam lines
+    em = Image.open(edge_mask_path).convert("L").resize((SIZE, SIZE))
+    edges = np.array(em)
 
-    edge_count = int((edges > 128).sum())
-    if edge_count < 100:          # fewer than 100 edge pixels → treat as blank
+    # Amplify faint edges (Pillow FIND_EDGES fallback produces softer values)
+    edges = np.clip(edges.astype(np.int32) * 2, 0, 255).astype(np.uint8)
+
+    edge_count = int((edges > 30).sum())
+    if edge_count < 100:
         return canvas, False
 
+    line_alpha = int(np.clip(opacity * 500, 0, 240))
     overlay = np.zeros((SIZE, SIZE, 4), dtype=np.uint8)
-    line_alpha = int(np.clip(opacity * 400, 0, 240))
-    overlay[edges > 128] = [0, 0, 0, line_alpha]
+    overlay[edges > 30] = [0, 0, 0, line_alpha]
 
-    canvas_rgba = canvas.convert("RGBA")
-    line_layer = Image.fromarray(overlay, "RGBA")
-    result = Image.alpha_composite(canvas_rgba, line_layer)
+    result = Image.alpha_composite(
+        canvas.convert("RGBA"),
+        Image.fromarray(overlay, "RGBA"),
+    )
     return result.convert("RGB"), True
 
 
