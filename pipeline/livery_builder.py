@@ -338,13 +338,31 @@ def _make_design(primary, secondary, accent, design, params, size=DEFAULT_SIZE) 
     elif design == "sunburst":
         _draw_sunburst(img, primary, secondary, accent, params, size=S)
 
-    # Universal Offsetting
+    # Universal Scaling and Positioning
+    scale_frac = float(params.get("scale", 1.0))
     pos_x = float(params.get("pos_x", 0.0))
     pos_y = float(params.get("pos_y", 0.0))
-    if pos_x != 0.0 or pos_y != 0.0:
-        dx = int(pos_x * S)
-        dy = int(pos_y * S)
-        img = ImageChops.offset(img, dx, dy)
+    
+    if scale_frac != 1.0 or pos_x != 0.0 or pos_y != 0.0:
+        if scale_frac == 1.0:
+            # Full screen pattern: wrap it seamlessly
+            img = ImageChops.offset(img, int(pos_x * S), int(pos_y * S))
+        else:
+            # Scaled pattern: treat like a localized decal on transparent background
+            target_size = int(S * scale_frac)
+            scaled = img.resize((target_size, target_size), Image.LANCZOS)
+            
+            # Place it according to pos_x, pos_y. 
+            # 0,0 is center. -1 is left/top, 1 is right/bottom.
+            center_x = int(S/2 + pos_x * (S/2))
+            center_y = int(S/2 + pos_y * (S/2))
+            
+            paste_x = center_x - target_size // 2
+            paste_y = center_y - target_size // 2
+            
+            out = Image.new("RGBA", (S, S), (0,0,0,0))
+            out.paste(scaled, (paste_x, paste_y))
+            img = out
 
     return img
 
