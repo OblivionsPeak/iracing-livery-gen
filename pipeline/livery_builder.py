@@ -450,7 +450,23 @@ def _draw_tearing(img, primary, secondary, accent, params, size=DEFAULT_SIZE):
     
     # Draw to RGBA layer
     c1 = np.array([0, 0, 0, 0], dtype=np.uint8)
-    c2 = np.array(list(secondary) + [255], dtype=np.uint8)
+    
+    fill_pat = params.get("fill_pattern", "solid")
+    if fill_pat == "digital_camo":
+        fill_img = Image.new("RGBA", (S, S), (0,0,0,0))
+        _draw_digital_camo(fill_img, primary, secondary, accent, params, size=S)
+        c2 = np.array(fill_img)
+    elif fill_pat == "topographic":
+        fill_img = Image.new("RGBA", (S, S), (0,0,0,0))
+        _draw_topographic(fill_img, primary, secondary, accent, params, size=S)
+        c2 = np.array(fill_img)
+    elif fill_pat == "circuit":
+        fill_img = Image.new("RGBA", (S, S), (0,0,0,0))
+        _draw_circuit(fill_img, primary, secondary, accent, params, size=S)
+        c2 = np.array(fill_img)
+    else:
+        c2 = np.array(list(secondary) + [255], dtype=np.uint8)
+        
     res = np.where(is_sec[..., None], c2, c1).astype(np.uint8)
     img.paste(Image.fromarray(res), (0, 0))
     

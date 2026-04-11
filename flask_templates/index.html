@@ -483,6 +483,21 @@
                    </div>
                  </div>
                </template>
+               
+               <template x-if="layer.id === 'tearing'">
+                 <div class="row" style="gap:10px; margin-top:10px;">
+                   <div style="flex:1">
+                     <label>Internal Fill Mask</label>
+                     <select x-model="layer.params.fill_pattern" @change="markChanged()">
+                       <option value="solid">Solid Color</option>
+                       <option value="digital_camo">Digital Camo Mask</option>
+                       <option value="topographic">Topographic Mask</option>
+                       <option value="circuit">Cyber-Circuit Mask</option>
+                     </select>
+                     <p style="font-size: 9px; color: var(--text-sec); margin-top:4px;">When set to a pattern, the tear acts as a mask revealing the pattern underneath!</p>
+                   </div>
+                 </div>
+               </template>
 
                <template x-if="layer.id === 'sunburst'">
                  <div class="row" style="gap:10px; margin-top:5px;">
