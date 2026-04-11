@@ -346,6 +346,8 @@ def _make_design(primary, secondary, accent, design, params, size=DEFAULT_SIZE) 
 
     # Universal Scaling and Positioning
     scale_frac = float(params.get("scale", 1.0))
+    # Clamp scale to prevent memory exhaustion (max 8x)
+    scale_frac = max(0.01, min(scale_frac, 8.0))
     pos_x = float(params.get("pos_x", 0.0))
     pos_y = float(params.get("pos_y", 0.0))
     
