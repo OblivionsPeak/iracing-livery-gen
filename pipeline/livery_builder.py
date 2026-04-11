@@ -401,59 +401,54 @@ def _draw_shards(img, primary, secondary, accent, params, size=DEFAULT_SIZE):
 
 def _draw_tearing(img, primary, secondary, accent, params, size=DEFAULT_SIZE):
     """
-    Shredded/Tearing effect — Jagged, directional paper-tear design.
-    Uses distorted linear gradients and fragmentation.
+    High-Speed Tearing effect — Highly anisotropic streaks disintegrating across a boundary.
+    Matches modern GT3 'shredded camo' style graphics.
     """
     S = size
-    angle_deg = params.get("angle", 45)
-    roughness = params.get("roughness", 0.5)
+    angle_deg = params.get("angle", 0)
     density   = params.get("shred_density", 0.4)
-    pos_shift = params.get("pos_shift", 0.0)
+    roughness = params.get("roughness", 0.7)
 
     angle_rad = math.radians(angle_deg)
-    
-    # Coordinate grid
     y_g, x_g = np.mgrid[0:S, 0:S]
     
-    # Transform to directional axes
-    # u is the axis of the tear, v is the axis crossing the tear
+    # Transform to directional axes (u is direction of tear)
     u = (x_g - S/2) * math.cos(angle_rad) + (y_g - S/2) * math.sin(angle_rad)
-    v = -(x_g - S/2) * math.sin(angle_rad) + (y_g - S/2) * math.cos(angle_rad)
     
-    # Normalize
-    v_norm = (v / (S * 0.5)) + pos_shift
+    # 1. Base gradient along U direction (tear direction fading out)
+    u_norm = -u / (S / 2.0)
+    grad = u_norm.astype(np.float32)
     
-    # Procedural Noise Distortion
     rng = np.random.default_rng(24)
-    # Low freq for large tears
-    noise_lo = rng.standard_normal((S//4, S//4)).astype(np.float32)
-    noise_lo_img = Image.fromarray(((noise_lo + 3)/6 * 255).astype(np.uint8), "L").resize((S, S), Image.BICUBIC)
-    noise_lo_arr = (np.array(noise_lo_img).astype(np.float32)/255.0 - 0.5) * 0.8
+
+    # 2. Hard, long anisotropic streaks (stretch along X, high detail along Y, then rotate)
+    base_noise = rng.uniform(-1, 1, (S//2, S//32)).astype(np.float32)
+    S_large = int(S * 1.5) # Overdraw so rotation doesn't have blank corners
+    base_img = Image.fromarray(((base_noise+1)/2*255).astype(np.uint8)).resize((S_large, S_large), Image.BICUBIC)
     
-    # High freq for jaggedness
-    noise_hi = rng.standard_normal((S//2, S//2)).astype(np.float32)
-    noise_hi_img = Image.fromarray(((noise_hi + 3)/6 * 255).astype(np.uint8), "L").resize((S, S), Image.BILINEAR)
-    noise_hi_arr = (np.array(noise_hi_img).astype(np.float32)/255.0 - 0.5) * 0.3
+    # Rotate (PIL rotates counter-clockwise by default, we apply -angle to match Cartesian)
+    rot_img = base_img.rotate(-angle_deg, resample=Image.BICUBIC)
+    left = (S_large - S) // 2
+    rot_cropped = rot_img.crop((left, left, left+S, left+S))
+    streaks_arr = (np.array(rot_cropped, dtype=np.float32) / 255.0 - 0.5) * 2.0
     
-    # Distorted boundary
-    distorted_v = v_norm + (noise_lo_arr + noise_hi_arr) * roughness
+    # 3. Medium Noise for boundary jitter
+    med_noise = rng.uniform(-1, 1, (S//4, S//8)).astype(np.float32)
+    med_img = Image.fromarray(((med_noise+1)/2*255).astype(np.uint8)).resize((S_large, S_large), Image.BILINEAR)
+    rot_med = med_img.rotate(-angle_deg, resample=Image.BILINEAR).crop((left, left, left+S, left+S))
+    med_arr = (np.array(rot_med, dtype=np.float32) / 255.0 - 0.5) * 0.8
     
-    # Main Tear Mask
-    is_sec = distorted_v > 0
+    # 4. Composite height map
+    mask_val = grad + streaks_arr * roughness + med_arr * (roughness * 0.5)
     
-    # Shredded Fragments (Micro-shreds)
-    # Stretched noise along U axis
-    shred_noise_map = rng.standard_normal((S//8, S//2)).astype(np.float32)
-    shred_noise_img = Image.fromarray(((shred_noise_map + 3)/6 * 255).astype(np.uint8), "L").resize((S, S), Image.NEAREST)
-    shred_noise = np.array(shred_noise_img).astype(np.float32)/255.0
+    # 5. Flying flecks (splatter) randomly appearing in the transition zone
+    flecks = rng.uniform(0, 1, (S, S))
+    is_fleck = (flecks > (1.0 - density * 0.05)) & (np.abs(mask_val) < 0.4)
     
-    # Mask of fragments: near the boundary where shred_noise is high
-    dist_to_edge = np.abs(distorted_v)
-    fragment_mask = (shred_noise > (1.0 - density)) & (dist_to_edge < 0.25)
+    # Threshold at 0
+    is_sec = (mask_val > 0) | is_fleck
     
-    # Combine
-    is_sec |= fragment_mask
-    
+    # Draw to RGBA layer
     c1 = np.array([0, 0, 0, 0], dtype=np.uint8)
     c2 = np.array(list(secondary) + [255], dtype=np.uint8)
     res = np.where(is_sec[..., None], c2, c1).astype(np.uint8)
@@ -466,7 +461,6 @@ def _draw_tearing(img, primary, secondary, accent, params, size=DEFAULT_SIZE):
     crack |= edge_h != 0
     crack |= edge_v != 0
     
-    # Thin but crisp accent line
     arr = np.array(img)
     arr[crack] = np.array(list(accent) + [255], dtype=np.uint8)
     img.paste(Image.fromarray(arr), (0, 0))
