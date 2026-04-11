@@ -1009,6 +1009,14 @@ document.addEventListener('alpine:init', () => {
     },
 
     addLayer(type, id, params = {}) {
+      // Seed defaults for params that require a valid value to render correctly
+      const defaults = { scale: 1.0, x: 50, y: 50 };
+      if (id === 'tearing') {
+        defaults.fill_pattern  = 'solid';
+        defaults.fill_primary  = this.config.primary   || '#1a1a2e';
+        defaults.fill_secondary = this.config.secondary || '#e63946';
+        defaults.fill_accent   = this.config.accent    || '#ffd700';
+      }
       const layer = {
         type: type,
         id: id,
@@ -1016,12 +1024,7 @@ document.addEventListener('alpine:init', () => {
         roughness: 0.2,
         opacity: 1.0,
         mirror: 'none',
-        params: {
-          scale: 1.0,
-          x: 50,
-          y: 50,
-          ...params
-        }
+        params: { ...defaults, ...params }
       };
       this.config.layers.push(layer);
       this.markChanged();
