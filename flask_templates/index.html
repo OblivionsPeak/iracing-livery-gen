@@ -325,13 +325,23 @@
   <div class="section-title">Colors</div>
   <div class="preset-bar">
     <span style="font-size:0.7rem; font-weight: 600; color:var(--text-muted); display:flex; align-items:center; margin-right: 4px;">PRESETS</span>
-    <button class="preset-btn" @click="applyPreset('#0a0a0a', '#c8102e', '#ffffff')">GT Red</button>
-    <button class="preset-btn" @click="applyPreset('#ffffff', '#003087', '#c8102e')">Gulf</button>
     <button class="preset-btn" @click="applyPreset('#003087', '#ffd700', '#ffffff')">Rothmans</button>
     <button class="preset-btn" @click="applyPreset('#1b1b1b', '#ffd700', '#888888')">Carbon Gold</button>
     <button class="preset-btn" @click="applyPreset('#006341', '#ffffff', '#ffd700')">British Green</button>
-    <button class="preset-btn" @click="applyPreset('#e8e8e8', '#cc0000', '#111111')">Martini</button>
     <button class="preset-btn" @click="applyPreset('#2d2d2d', '#ff6b00', '#ffffff')">Stealth</button>
+    <button class="preset-btn" @click="applyPreset('#000000', '#ff0000', '#ffffff')">Advan</button>
+    <button class="preset-btn" @click="applyPreset('#6a0dad', '#39ff14', '#ffffff')">HKS Drift</button>
+    <button class="preset-btn" @click="applyPreset('#003399', '#ffd700', '#ffff00')">Subaru WRT</button>
+    <button class="preset-btn" @click="applyPreset('#000000', '#c5a059', '#888888')">JPS</button>
+    <button class="preset-btn" @click="applyPreset('#ffffff', '#003087', '#c8102e')">Gulf</button>
+    <button class="preset-btn" @click="applyPreset('#ff6600', '#006633', '#ffffff')">Renown 787B</button>
+    <button class="preset-btn" @click="applyPreset('#ffffff', '#008037', '#ed1c24')">Castrol</button>
+    <button class="preset-btn" @click="applyPreset('#f19eb5', '#d01f3c', '#ffffff')">Pink Pig</button>
+    <button class="preset-btn" @click="applyPreset('#001c32', '#fbe106', '#e21b4d')">Red Bull</button>
+    <button class="preset-btn" @click="applyPreset('#004ba0', '#ffd200', '#ffffff')">Sunoco</button>
+    <button class="preset-btn" @click="applyPreset('#129c5a', '#ef3340', '#ffffff')">Benetton</button>
+    <button class="preset-btn" @click="applyPreset('#e8e8e8', '#cc0000', '#111111')">Martini</button>
+    <button class="preset-btn" @click="applyPreset('#1c1cf0', '#c0c0c0', '#000000')">Raybrig</button>
   </div>
   
   <div class="color-grid">
@@ -396,6 +406,10 @@
              <label style="font-size:10px; margin-bottom:4px;">Roughness <span class="val" x-text="Math.round(layer.roughness * 100) + '%'"></span></label>
              <input type="range" min="0" max="1" step="0.05" x-model.number="layer.roughness" @input.debounce.300ms="markChanged()">
            </div>
+           <div style="flex:1">
+             <label style="font-size:10px; margin-bottom:4px;">Opacity <span class="val" x-text="Math.round((layer.opacity !== undefined ? layer.opacity : 1.0) * 100) + '%'"></span></label>
+             <input type="range" min="0" max="1" step="0.05" x-model.number="layer.opacity" @input.debounce.300ms="markChanged()">
+           </div>
         </div>
 
         <!-- Layer Specific Settings -->
@@ -430,16 +444,96 @@
           </template>
 
           <!-- Design Settings -->
-          <template x-if="layer.type === 'design' && ['diagonal_stripes','racing_stripes','two_tone'].includes(layer.id)">
-             <div class="row" style="gap:10px;">
-                <div style="flex:1">
-                  <label>Angle</label>
-                  <input type="range" min="0" max="180" x-model.number="layer.params.angle" @input.debounce.300ms="markChanged()">
-                </div>
-                <div style="flex:1">
-                  <label>Stripe Width</label>
-                  <input type="range" min="40" max="400" x-model.number="layer.params.stripe_width" @input.debounce.300ms="markChanged()">
-                </div>
+          <template x-if="layer.type === 'design' && ['diagonal_stripes','racing_stripes','two_tone','tearing'].includes(layer.id)">
+             <div style="display:flex; flex-direction:column; gap:10px;">
+               <div class="row" style="gap:10px;">
+                  <div style="flex:1">
+                    <label>Angle <span class="val" x-text="(layer.params.angle || 0) + '°'"></span></label>
+                    <input type="range" min="0" max="360" x-model.number="layer.params.angle" @input.debounce.300ms="markChanged()">
+                    <div style="display:flex; gap:4px; margin-top:6px;">
+                      <button class="btn-sm" style="font-size:9px; padding:2px 4px;" @click="layer.params.angle = 0; markChanged()">0° (Snap)</button>
+                      <button class="btn-sm" style="font-size:9px; padding:2px 4px;" @click="layer.params.angle = 45; markChanged()">45°</button>
+                      <button class="btn-sm" style="font-size:9px; padding:2px 4px;" @click="layer.params.angle = 90; markChanged()">90°</button>
+                    </div>
+                  </div>
+                  <div style="flex:1">
+                    <label x-text="layer.id === 'tearing' ? 'Roughness' : 'Stripe Width'"></label>
+                    <template x-if="layer.id === 'tearing'">
+                      <input type="range" min="0" max="1" step="0.05" x-model.number="layer.params.roughness" @input.debounce.300ms="markChanged()">
+                    </template>
+                    <template x-if="layer.id !== 'tearing'">
+                      <input type="range" min="40" max="400" x-model.number="layer.params.stripe_width" @input.debounce.300ms="markChanged()">
+                    </template>
+                  </div>
+               </div>
+               
+               <template x-if="layer.id === 'tearing' || layer.id === 'speed_blur' || layer.id === 'topographic' || layer.id === 'splatter' || layer.id === 'digital_camo' || layer.id === 'circuit'">
+                 <div class="row" style="gap:10px; margin-top:5px;">
+                   <div style="flex:1">
+                     <label x-text="layer.id === 'topographic' ? 'Frequency' : (layer.id === 'digital_camo' || layer.id === 'circuit' ? 'Tile Size' : 'Density')"></label>
+                     <template x-if="layer.id === 'topographic'">
+                       <input type="range" min="1" max="15" step="0.5" x-model.number="layer.params.frequency" @input.debounce.300ms="markChanged()">
+                     </template>
+                     <template x-if="layer.id === 'digital_camo' || layer.id === 'circuit'">
+                       <input type="range" min="16" max="256" step="8" x-model.number="layer.params.tile_size" @input.debounce.300ms="markChanged()">
+                     </template>
+                     <template x-if="layer.id === 'tearing' || layer.id === 'splatter' || layer.id === 'speed_blur'">
+                       <input type="range" min="0" max="1" step="0.05" x-model.number="layer.params.shred_density" @input.debounce.300ms="markChanged()">
+                     </template>
+                   </div>
+                 </div>
+               </template>
+               
+               <template x-if="layer.id === 'tearing'">
+                 <div class="row" style="gap:10px; margin-top:10px;">
+                   <div style="flex:1">
+                     <label>Internal Fill Mask</label>
+                     <select x-model="layer.params.fill_pattern" @change="markChanged()">
+                       <option value="solid">Solid Color</option>
+                       <option value="digital_camo">Digital Camo Mask</option>
+                       <option value="topographic">Topographic Mask</option>
+                       <option value="circuit">Cyber-Circuit Mask</option>
+                     </select>
+                     <p style="font-size: 9px; color: var(--text-sec); margin-top:4px;">When set to a pattern, the tear acts as a mask revealing the pattern underneath!</p>
+                     
+                     <template x-if="layer.params.fill_pattern && layer.params.fill_pattern !== 'solid'">
+                       <div class="row" style="margin-top: 10px; gap: 10px;">
+                         <div style="flex:1">
+                           <label style="font-size:9px;">Mask Secondary</label>
+                           <input type="color" style="width:100%; height:30px; border:none; border-radius:4px; cursor:pointer;" x-model="layer.params.fill_secondary" @input.debounce.300ms="markChanged()">
+                         </div>
+                         <div style="flex:1">
+                           <label style="font-size:9px;">Mask Accent</label>
+                           <input type="color" style="width:100%; height:30px; border:none; border-radius:4px; cursor:pointer;" x-model="layer.params.fill_accent" @input.debounce.300ms="markChanged()">
+                         </div>
+                       </div>
+                     </template>
+                   </div>
+                 </div>
+               </template>
+
+               <template x-if="layer.id === 'sunburst'">
+                 <div class="row" style="gap:10px; margin-top:5px;">
+                   <div style="flex:1">
+                     <label>Ray Count <span class="val" x-text="layer.params.count || 12"></span></label>
+                     <input type="range" min="4" max="48" step="1" x-model.number="layer.params.count" @input.debounce.300ms="markChanged()">
+                   </div>
+                   <div style="flex:1">
+                     <label>Focal X <span class="val" x-text="layer.params.cx_frac || 0.5"></span></label>
+                     <input type="range" min="0" max="1" step="0.05" x-model.number="layer.params.cx_frac" @input.debounce.300ms="markChanged()">
+                   </div>
+                 </div>
+               </template>
+               
+               <template x-if="layer.id === 'racing_stripes'">
+                 <div style="margin-top:5px;">
+                   <label>Orientation</label>
+                   <select x-model="layer.params.direction" @change="markChanged()">
+                     <option value="vertical">Vertical (Front-to-Back)</option>
+                     <option value="horizontal">Horizontal (Side-to-Side)</option>
+                   </select>
+                 </div>
+               </template>
              </div>
           </template>
 
@@ -470,15 +564,33 @@
                     @input="layer.params.cx_frac = $event.target.value / 100; markChanged()">
                 </div>
               </div>
+            </template>
+
+            <!-- Universal Offset Controls for ALL Designs -->
+            <div class="pbr-row" style="display:flex; gap:10px; margin-top:10px; padding-top:10px; border-top: 1px dashed rgba(255,255,255,0.1);">
+              <div style="flex:1">
+                <label style="font-size:10px; margin-bottom:4px;">Scale <span class="val" x-text="Math.round((layer.params.scale || 1.0) * 100) + '%'"></span></label>
+                <input type="range" min="0" max="2" step="0.05" x-model.number="layer.params.scale" @input.debounce.300ms="markChanged()">
+              </div>
+              <div style="flex:1">
+                <label style="font-size:10px; margin-bottom:4px;">Position X <span class="val" x-text="Math.round((layer.params.pos_x || 0) * 100) + '%'"></span></label>
+                <input type="range" min="-1" max="1" step="0.05" x-model.number="layer.params.pos_x" @input.debounce.300ms="markChanged()">
+              </div>
+              <div style="flex:1">
+                <label style="font-size:10px; margin-bottom:4px;">Position Y <span class="val" x-text="Math.round((layer.params.pos_y || 0) * 100) + '%'"></span></label>
+                <input type="range" min="-1" max="1" step="0.05" x-model.number="layer.params.pos_y" @input.debounce.300ms="markChanged()">
+              </div>
             </div>
-          </template>
+        </div>
+      </div>
+    </template>
         </div>
       </div>
     </template>
   </div>
 
   <div class="row" style="margin-top: 30px;">
-     <button class="btn gold w-full" style="padding:15px; font-weight:700;" @click="exportiRacing()">Download iRacing TGAs (ZIP)</button>
+     <button class="btn gold w-full" style="padding:15px; font-weight:700;" @click="exportiRacingZIP()">Download iRacing TGAs (ZIP)</button>
   </div>
   
   <div class="section-title" style="margin-top: 20px;">Add Decal</div>
@@ -497,12 +609,24 @@
   <div class="section-title">Material Finish</div>
   <div class="row">
     <div>
-      <label style="margin-top:0;">Surface</label>
+      <label style="margin-top:0;">Base Metallic <span class="val" x-text="Math.round(config.base_metallic * 100) + '%'"></span></label>
+      <input type="range" min="0" max="1" step="0.05" style="margin-top:4px;" x-model.number="config.base_metallic" @input.debounce.300ms="markChanged()">
+    </div>
+    <div>
+      <label style="margin-top:0;">Base Roughness <span class="val" x-text="Math.round(config.base_roughness * 100) + '%'"></span></label>
+      <input type="range" min="0" max="1" step="0.05" style="margin-top:4px;" x-model.number="config.base_roughness" @input.debounce.300ms="markChanged()">
+    </div>
+  </div>
+  <div class="row" style="margin-top: 10px;">
+    <div>
+      <label style="margin-top:0;">Surface Overlay</label>
       <select x-model="config.texture" @change="markChanged()">
         <option value="none">Clearcoat (Gloss)</option>
         <option value="matte">Matte</option>
         <option value="carbon_fiber">Carbon Fiber</option>
+        <option value="forged_carbon">Forged Carbon</option>
         <option value="brushed_metal">Brushed Metal</option>
+        <option value="metallic_flake">Metallic Flake Paint</option>
       </select>
     </div>
     <div>
@@ -527,15 +651,16 @@
 
   <!-- View Toggle Tabs -->
   <div class="view-tabs">
-    <div class="view-tab" :class="{'active': viewMode === '2d'}" @click="viewMode = '2d'">2D Mapping</div>
-    <div class="view-tab" :class="{'active': viewMode === '3d'}" @click="viewMode = '3d'">3D Decal Viewer</div>
+    <div class="view-tab" :class="{active: viewMode === '2d'}" @click="viewMode = '2d'">2D Livery</div>
+    <div class="view-tab" :class="{active: viewMode === 'spec'}" @click="viewMode = 'spec'">2D Spec Map</div>
+    <div class="view-tab" :class="{active: viewMode === '3d'}" @click="viewMode = '3d'; $nextTick(() => { if (!threeRenderer) initThree(); })">3D Preview</div>
   </div>
 
-    <div id="results" class="result-card" x-show="previewClean || previewBaked" x-cloak>
+  <div id="results" class="result-card" x-show="previewClean || previewBaked" x-cloak>
     
     <!-- 2D View -->
-    <div class="preview-wrapper" x-show="viewMode === '2d'" x-ref="twoDWrapper" style="position: relative;">
-      <img :src="'/preview/' + (previewBaked || previewClean) + '?t=' + timestamp" @error="if(previewBaked) previewBaked = null" alt="Livery" style="width: 100%; pointer-events: none; display: block;">
+    <div class="preview-wrapper" x-show="viewMode === '2d' || viewMode === 'spec'" x-ref="twoDWrapper" style="position: relative;">
+      <img :src="'/preview/' + (viewMode === 'spec' ? previewBaked.replace('_baked.png', '_spec.png') : (previewBaked || previewClean)) + '?t=' + timestamp" @error="if(previewBaked) previewBaked = null" alt="Livery" style="width: 100%; pointer-events: none; display: block;">
       
       <template x-for="(layer, idx) in config.layers.filter(l => l.type === 'logo')" :key="idx">
          <img :src="'/static/logos/' + layer.id + '/' + layer.params.filename" 
@@ -551,7 +676,7 @@
     <div class="result-footer">
       <span class="result-label" x-text="previewBaked"></span>
       <div style="display:flex;gap:6px;">
-        <button class="btn-export" @click="exportiRacing()">Export to iRacing</button>
+        <button class="btn-export" @click="exportiRacingDirect()">Export to iRacing</button>
         <a class="btn-dl" :href="'/download/' + previewBaked" :download="previewBaked">Download PNG</a>
       </div>
     </div>
@@ -584,7 +709,14 @@ const DESIGNS = [
   {id:'harlequin', name:'Harlequin', svg:'<svg><path d="M12 0l6 6-6 6-6-6z M12 12l6 6-6 6-6-6z M0 6l6 6-6 6-6-6z M24 6l-6 6-6-6 6-6z"/></svg>'},
   {id:'pinstripe', name:'Pinstripe', svg:'<svg><path d="M0 20L20 0h2L0 22zM0 10L10 0h2L0 12z" /></svg>'},
   {id:'number_panel', name:'Num Panel', svg:'<svg><rect width="24" height="24" fill="currentColor" fill-opacity="0.2"/><rect x="6" y="8" width="12" height="8" rx="1"/></svg>'},
-  {id:'shard', name:'Shard', svg:'<svg><path d="M12 2 L22 12 L12 22 L2 12 Z M12 2 L8 8 L12 14 L16 8 Z" fill="currentColor" fill-opacity="0.7"/></svg>'}
+  {id:'shard', name:'Shard', svg:'<svg><path d="M12 2 L22 12 L12 22 L2 12 Z M12 2 L8 8 L12 14 L16 8 Z" fill="currentColor" fill-opacity="0.7"/></svg>'},
+  {id:'tearing', name:'Tearing', svg:'<svg><path d="M2 12 L8 10 L6 8 L12 6 L10 12 L18 10 L16 14 L22 12 L18 20 L4 18 Z" fill="currentColor"/></svg>'},
+  {id:'digital_camo', name:'Digi-Camo', svg:'<svg><rect x="2" y="2" width="6" height="6" fill="currentColor"/><rect x="10" y="6" width="6" height="6" fill="currentColor" fill-opacity="0.6"/><rect x="4" y="12" width="8" height="8" fill="currentColor" fill-opacity="0.4"/><rect x="16" y="14" width="6" height="6" fill="currentColor"/></svg>'},
+  {id:'speed_blur', name:'Speed Blur', svg:'<svg><path d="M2 6h14M4 12h18M2 18h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>'},
+  {id:'topographic', name:'Topo', svg:'<svg><path d="M12 2c-5 0-9 4-9 9s4 9 9 9 9-4 9-9-4-9-9-9zm0 16c-3.9 0-7-3.1-7-7s3.1-7 7-7 7 3.1 7 7-3.1 7-7 7z" fill="none" stroke="currentColor" stroke-width="1"/><path d="M12 6c-2.8 0-5 2.2-5 5s2.2 5 5 5 5-2.2 5-5-2.2-5-5-5z" fill="currentColor" fill-opacity="0.3"/></svg>'},
+  {id:'circuit', name:'Circuit', svg:'<svg><path d="M4 4h8v8h8M4 12h8v8M18 4v4" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="4" cy="4" r="2" fill="currentColor"/><circle cx="20" cy="12" r="2" fill="currentColor"/></svg>'},
+  {id:'splatter', name:'Splatter', svg:'<svg><path d="M12 4c-4 0-4 4-8 4s-2 4 2 6-2 6 6 6 6-2 8-6-2-10-8-10z" fill="currentColor"/><circle cx="4" cy="16" r="1" fill="currentColor"/><circle cx="20" cy="8" r="1.5" fill="currentColor"/></svg>'},
+  {id:'sunburst', name:'Sunburst', svg:'<svg><path d="M12 12L0 6M12 12L6 0M12 12L18 0M12 12L24 6M12 12L24 18M12 12L18 24M12 12L6 24M12 12L0 18" stroke="currentColor" stroke-width="1.5"/></svg>'}
 ];
 
 document.addEventListener('alpine:init', () => {
@@ -627,6 +759,8 @@ document.addEventListener('alpine:init', () => {
       texture_opacity: 25,
       template_opacity: 35,
       grunge_amount: 0,
+      base_metallic: 0.05,
+      base_roughness: 0.15,
       layers: [
         { type: 'design', id: 'solid', metallic: 0.1, roughness: 0.5, params: {} }
       ]
@@ -813,6 +947,7 @@ document.addEventListener('alpine:init', () => {
       this.config.secondary = s;
       this.config.accent = a;
       this.markChanged();
+      this.showToast(`Applied Preset Palette.`);
     },
     
     showToast(msg) {
@@ -877,6 +1012,7 @@ document.addEventListener('alpine:init', () => {
         id: id,
         metallic: 0,
         roughness: 0.2,
+        opacity: 1.0,
         mirror: 'none',
         params: {
           scale: 20,
@@ -905,6 +1041,8 @@ document.addEventListener('alpine:init', () => {
         texture_opacity: this.config.texture_opacity / 100,
         template_opacity: this.config.template_opacity / 100,
         grunge_amount: this.config.grunge_amount / 100,
+        base_metallic: this.config.base_metallic,
+        base_roughness: this.config.base_roughness,
         layers: this.config.layers
       };
     },
@@ -984,7 +1122,7 @@ document.addEventListener('alpine:init', () => {
       this.markChanged();
     },
 
-    async exportiRacing() {
+    async exportiRacingZIP() {
       this.isBuilding = true;
       try {
         const r = await fetch('/export-tga', { 
@@ -992,17 +1130,43 @@ document.addEventListener('alpine:init', () => {
            headers: {'Content-Type':'application/json'},
            body: JSON.stringify(this.getPayload()) 
         });
-        if (!r.ok) throw new Error('Export failed. Make sure you have rendered at least once.');
+        if (!r.ok) throw new Error('Export failed.');
         const blob = await r.blob();
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `iracing_livery_${this.config.customerId || '42'}.zip`;
+        a.download = `iracing_${this.config.carId}_${this.config.carNumber}.zip`;
         a.click();
-        this.showToast('✓ iRacing TGAs ready (ZIP)');
+        this.showToast('✓ ZIP Export Complete');
       } catch(e) {
         this.statusError = true;
         this.statusMsg = 'Export failed: ' + e.message;
+      } finally {
+        this.isBuilding = false;
+      }
+    },
+
+    async exportiRacingDirect() {
+      if (!this.previewBaked) {
+          alert("Please generate a livery first.");
+          return;
+      }
+      this.isBuilding = true;
+      try {
+        const r = await fetch('/export-to-iracing', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+              car_id: this.config.carId !== 'custom' ? this.config.carId : this.activeCar,
+              car_number: this.config.carNumber,
+              filename: this.previewBaked
+          })
+        });
+        const d = await r.json();
+        if (d.error) throw new Error(d.error);
+        this.showToast('✓ Exported to iRacing paint folder');
+      } catch(e) {
+        alert('Direct export failed: ' + e.message);
       } finally {
         this.isBuilding = false;
       }

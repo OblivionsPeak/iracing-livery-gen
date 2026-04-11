@@ -10,6 +10,8 @@ import json
 import os
 import time
 import io
+import json
+import zipfile
 import collections
 from pathlib import Path
 
@@ -26,13 +28,20 @@ app.config["MAX_CONTENT_LENGTH"] = 64 * 1024 * 1024  # 64 MB upload limit
 CARS_JSON     = Path("cars.json")
 TEMPLATES_DIR = Path("car_templates")
 LOGOS_DIR     = Path("static/logos")
-
-PREVIEW_CACHE = collections.OrderedDict()
-MAX_CACHE_SIZE = 20
+PREVIEWS_DIR  = Path("static/previews")
 
 # Create runtime dirs
 TEMPLATES_DIR.mkdir(parents=True, exist_ok=True)
 LOGOS_DIR.mkdir(parents=True, exist_ok=True)
+PREVIEWS_DIR.mkdir(parents=True, exist_ok=True)
+
+def _cleanup_previews():
+    """Purge preview files older than 2 hours to save disk space."""
+    now = time.time()
+    for f in PREVIEWS_DIR.glob("*.png"):
+        if now - f.stat().st_mtime > 7200:
+            try: f.unlink()
+            except: pass
 
 
 def _clamp(val, lo, hi, default):
@@ -228,22 +237,7 @@ def build_livery():
             "opacity": l.get("opacity", 1.0)
         })
 
-    # Debug: inspect template before build
-    tmpl_debug = {}
-    if tmpl.exists():
-        from PIL import Image as _PI
-        _ta = np.array(_PI.open(tmpl).convert("L"))
-        tmpl_debug["grey_min"]        = int(_ta.min())
-        tmpl_debug["grey_max"]        = int(_ta.max())
-        tmpl_debug["grey_mean"]       = round(float(_ta.mean()), 1)
-        tmpl_debug["dark_pixels_pct"] = round(float((_ta < 50).mean() * 100), 2)
-        _ep = tmpl.parent / "edge_mask.png"
-        if _ep.exists():
-            _ea = np.array(_PI.open(_ep).convert("L"))
-            tmpl_debug["edge_pixels"] = int((_ea > 20).sum())
-        else:
-            tmpl_debug["edge_pixels"] = "no edge_mask.png"
-
+    _cleanup_previews()
     try:
         from pipeline.livery_builder import build, hex_to_rgb
         img_clean, img_baked, spec_map = build(
@@ -255,7 +249,10 @@ def build_livery():
             texture          = str(data.get("texture", "none")).lower().strip(),
             texture_opacity  = texture_opacity,
             template_opacity = template_opacity,
-            grunge_amount    = _clamp(data.get("grunge_amount", 0.0), 0.0, 1.0, 0.0)
+            grunge_amount    = _clamp(data.get("grunge_amount", 0.0), 0.0, 1.0, 0.0),
+            base_metallic    = float(data.get("base_metallic", 0.0)),
+            base_roughness   = float(data.get("base_roughness", 0.1)),
+            size             = 1024 # PREVIEW SCALE: 4x faster than 2048
         )
     except Exception as e:
         import traceback
@@ -267,14 +264,10 @@ def build_livery():
     file_baked = f"{base_name}_baked.png"
     file_spec  = f"{base_name}_spec.png"
 
-    # Serialize images to RAM cache (evict oldest if full)
-    entries = [(file_clean, img_clean), (file_baked, img_baked), (file_spec, spec_map)]
-    for fname, pil_img in entries:
-        buf = io.BytesIO()
-        pil_img.save(buf, format="PNG", compress_level=1)  # fast encode; ~same file size
-        PREVIEW_CACHE[fname] = buf.getvalue()
-        if len(PREVIEW_CACHE) > MAX_CACHE_SIZE:
-            PREVIEW_CACHE.popitem(last=False)
+    # Save to disk cache for multi-worker support
+    img_clean.save(PREVIEWS_DIR / file_clean, compress_level=1)
+    img_baked.save(PREVIEWS_DIR / file_baked, compress_level=1)
+    spec_map.save(PREVIEWS_DIR / file_spec, compress_level=1)
 
     return jsonify({
         "status":      "ok",
@@ -321,23 +314,23 @@ def template_debug(car_id):
         }
 
     return jsonify(info)
-
-
 # ---------------------------------------------------------------------------
 
 @app.route("/preview/<filename>")
 def preview(filename):
-    if filename not in PREVIEW_CACHE:
-        return "Not found in RAM cache", 404
-    return send_file(io.BytesIO(PREVIEW_CACHE[filename]), mimetype="image/png")
+    path = PREVIEWS_DIR / filename
+    if not path.exists():
+        return "Not found in cache", 404
+    return send_file(path, mimetype="image/png")
 
 
 @app.route("/download/<filename>")
 def download(filename):
-    if filename not in PREVIEW_CACHE:
-        return "Not found in RAM cache", 404
+    path = PREVIEWS_DIR / filename
+    if not path.exists():
+        return "Not found in cache", 404
     return send_file(
-        io.BytesIO(PREVIEW_CACHE[filename]),
+        path,
         mimetype="image/png",
         as_attachment=True,
         download_name=filename,
@@ -348,25 +341,86 @@ def download(filename):
 # iRacing export
 # ---------------------------------------------------------------------------
 
+@app.route("/export-tga", methods=["POST"])
+def export_tga():
+    """Generates a ZIP with TGA files for manual iRacing deployment."""
+    from PIL import Image
+    data = request.json
+    layers = data.get("layers", [])
+    car_id = data.get("car_id", "custom")
+    customer_id = str(data.get("customer_id", "42")).strip()
+    
+    # 1. Re-run build to get clean and spec buffers
+    # (In a production app we'd pull from cache, but building is fast)
+    from pipeline.livery_builder import build, hex_to_rgb
+    tmpl = TEMPLATES_DIR / car_id / "template.png"
+    
+    img_clean, _, spec_map = build(
+        template_path = tmpl,
+        primary = hex_to_rgb(data.get("primary", "#1a1a2e")),
+        secondary = hex_to_rgb(data.get("secondary", "#e63946")),
+        accent = hex_to_rgb(data.get("accent", "#ffd700")),
+        layers = layers,
+        texture = data.get("texture", "none"),
+        texture_opacity = float(data.get("texture_opacity", 0.25)),
+        template_opacity = 0, # FORCE NO WIREFRAMES FOR TGA
+        grunge_amount = float(data.get("grunge_amount", 0.0)),
+        base_metallic = float(data.get("base_metallic", 0.0)),
+        base_roughness = float(data.get("base_roughness", 0.1)),
+        size = 2048 # MASTER EXPORT RESOLUTION
+    )
+
+    # 2. Package into ZIP
+    zip_buf = io.BytesIO()
+    with zipfile.ZipFile(zip_buf, "w") as zf:
+        # iRacing expects .tga files. PIL handles this.
+        # Main Livery
+        main_tga = io.BytesIO()
+        img_clean.save(main_tga, format="TGA")
+        zf.writestr(f"car_{customer_id}.tga", main_tga.getvalue())
+        
+        # Spec Map
+        spec_tga = io.BytesIO()
+        spec_map.save(spec_tga, format="TGA")
+        zf.writestr(f"car_spec_{customer_id}.tga", spec_tga.getvalue())
+
+    zip_buf.seek(0)
+    return send_file(
+        zip_buf,
+        mimetype="application/zip",
+        as_attachment=True,
+        download_name=f"iracing_liveries_{customer_id}.zip"
+    )
+
+
 @app.route("/export-to-iracing", methods=["POST"])
 def export_to_iracing():
     data = request.json
-    filename   = data.get("filename", "")
+    filename   = data.get("filename", "") # This should ideally be the _clean version
     car_id     = data.get("car_id", "")
     car_number = str(data.get("car_number", "0")).strip().lstrip("0") or "0"
 
-    if filename not in PREVIEW_CACHE:
-        return jsonify({"error": "Preview RAM stream not found"}), 404
+    # FORCE USE CLEAN BUFFER IF POSSIBLE
+    clean_filename = filename.replace("_baked.png", "_clean.png")
+    target_file = clean_filename if (PREVIEWS_DIR / clean_filename).exists() else filename
+    target_path = PREVIEWS_DIR / target_file
+
+    if not target_path.exists():
+        return jsonify({"error": "Preview disk stream not found"}), 404
 
     paint_dir = Path.home() / "Documents" / "iRacing" / "paint" / car_id
     if not paint_dir.exists():
-        return jsonify({
-            "error": "iRacing paint folder not found",
-            "expected_path": str(paint_dir)
-        }), 404
+        # Fallback to current dir if iRacing path is missing (for local dev testing)
+        paint_dir = Path("exports") / car_id
+        paint_dir.mkdir(parents=True, exist_ok=True)
 
-    dest = paint_dir / f"car_{car_number}.png"
-    dest.write_bytes(PREVIEW_CACHE[filename])
+    dest = paint_dir / f"car_{car_number}.tga" # Save as TGA for iRacing
+    
+    # Convert PNG from disk to TGA using PIL
+    from PIL import Image
+    img = Image.open(target_path)
+    img.save(dest, format="TGA")
+    
     return jsonify({"status": "ok", "exported_to": str(dest)})
 
 

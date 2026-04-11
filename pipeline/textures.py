@@ -14,6 +14,8 @@ def generate_texture(name: str, size: int = SIZE) -> Image.Image:
         "carbon_fiber": _carbon_fiber,
         "brushed_metal": _brushed_metal,
         "matte":         _matte_noise,
+        "forged_carbon": _forged_carbon,
+        "metallic_flake": _metallic_flake,
     }
     fn = generators.get(name)
     if fn is None:
@@ -64,3 +66,25 @@ def _matte_noise(size: int) -> Image.Image:
     arr += rng.normal(0, 8, (size, size))
     arr = np.clip(arr, 140, 220).astype(np.uint8)
     return Image.fromarray(arr, mode="L").convert("RGB")
+
+def _forged_carbon(size: int) -> Image.Image:
+    """Angular, overlapping shards of carbon fiber composites."""
+    rng = np.random.default_rng(99)
+    res = np.full((size, size), 40, dtype=np.float32)
+    for angle in [0, 45, 90, 135]:
+        n = rng.uniform(-40, 60, (size//12, size//3)).astype(np.float32)
+        layer = Image.fromarray(n).resize((size, size), Image.NEAREST).rotate(angle, Image.NEAREST, fillcolor=0)
+        res += np.array(layer)
+    arr = np.clip(res, 10, 80).astype(np.uint8)
+    return Image.fromarray(arr).convert("RGB")
+
+def _metallic_flake(size: int) -> Image.Image:
+    """High frequency bright specks mimicking metallic car paint."""
+    rng = np.random.default_rng(77)
+    arr = np.full((size, size), 128, dtype=np.float32)
+    flakes = rng.uniform(0, 1, (size, size))
+    arr[flakes > 0.95] = 255
+    arr[flakes > 0.98] = 200
+    arr = np.clip(arr, 90, 255).astype(np.uint8)
+    return Image.fromarray(arr).convert("RGB")
+
