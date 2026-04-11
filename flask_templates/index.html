@@ -390,10 +390,14 @@
       <div class="layer-card">
         <div class="layer-header">
            <div style="display:flex; align-items:center; gap:8px;">
-             <span class="layer-drag-handle">::</span>
              <strong x-text="layer.type === 'logo' ? (layer.params.filename || 'Logo') : layer.id.charAt(0).toUpperCase() + layer.id.slice(1)"></strong>
            </div>
-           <button class="layer-delete" @click="removeLayer(index)">&times;</button>
+           <div style="display:flex; align-items:center; gap:4px;">
+             <button class="btn-sm" style="padding:2px 6px; font-size:11px; width:auto; flex:none;" title="Move up" @click="moveLayer(index, 1)" :disabled="index === config.layers.length - 1" :style="index === config.layers.length - 1 ? 'opacity:0.3' : ''">▲</button>
+             <button class="btn-sm" style="padding:2px 6px; font-size:11px; width:auto; flex:none;" title="Move down" @click="moveLayer(index, -1)" :disabled="index === 0" :style="index === 0 ? 'opacity:0.3' : ''">▼</button>
+             <button class="btn-sm" style="padding:2px 6px; font-size:11px; width:auto; flex:none;" title="Duplicate layer" @click="duplicateLayer(index)">⧉</button>
+             <button class="layer-delete" @click="removeLayer(index)">&times;</button>
+           </div>
         </div>
         
         <!-- Shared PBR Controls -->
@@ -410,6 +414,30 @@
              <label style="font-size:10px; margin-bottom:4px;">Opacity <span class="val" x-text="Math.round((layer.opacity !== undefined ? layer.opacity : 1.0) * 100) + '%'"></span></label>
              <input type="range" min="0" max="1" step="0.05" x-model.number="layer.opacity" @input.debounce.300ms="markChanged()">
            </div>
+        </div>
+
+        <!-- Per-Layer Color Overrides -->
+        <div style="margin-top:8px;">
+          <label style="font-size:10px; margin-bottom:4px; cursor:pointer; display:flex; align-items:center; gap:6px; justify-content:flex-start;">
+            <input type="checkbox" x-model="layer.use_custom_colors" @change="markChanged()" style="width:auto; position:static; opacity:1; cursor:pointer;">
+            <span style="text-transform:uppercase; letter-spacing:0.05em;">Custom Layer Colors</span>
+          </label>
+          <template x-if="layer.use_custom_colors">
+            <div style="display:flex; gap:6px; margin-top:6px;">
+              <div style="flex:1; text-align:center;">
+                <div style="font-size:9px; color:var(--text-muted); margin-bottom:3px;">PRIMARY</div>
+                <input type="color" style="width:100%; height:26px; border:none; border-radius:4px; cursor:pointer; padding:0;" x-model="layer.override_primary" @input.debounce.300ms="markChanged()">
+              </div>
+              <div style="flex:1; text-align:center;">
+                <div style="font-size:9px; color:var(--text-muted); margin-bottom:3px;">SECONDARY</div>
+                <input type="color" style="width:100%; height:26px; border:none; border-radius:4px; cursor:pointer; padding:0;" x-model="layer.override_secondary" @input.debounce.300ms="markChanged()">
+              </div>
+              <div style="flex:1; text-align:center;">
+                <div style="font-size:9px; color:var(--text-muted); margin-bottom:3px;">ACCENT</div>
+                <input type="color" style="width:100%; height:26px; border:none; border-radius:4px; cursor:pointer; padding:0;" x-model="layer.override_accent" @input.debounce.300ms="markChanged()">
+              </div>
+            </div>
+          </template>
         </div>
 
         <!-- Layer Specific Settings -->
@@ -628,18 +656,53 @@
             </template>
 
             <!-- Universal Offset Controls for ALL Designs -->
-            <div class="pbr-row" style="display:flex; gap:10px; margin-top:10px; padding-top:10px; border-top: 1px dashed rgba(255,255,255,0.1);">
-              <div style="flex:1">
-                <label style="font-size:10px; margin-bottom:4px;">Scale <span class="val" x-text="Math.round((layer.params.scale || 1.0) * 100) + '%'"></span></label>
-                <input type="range" min="0" max="2" step="0.05" x-model.number="layer.params.scale" @input.debounce.300ms="markChanged()">
+            <div style="margin-top:10px; padding-top:10px; border-top: 1px dashed rgba(255,255,255,0.1); display:flex; flex-direction:column; gap:8px;">
+              <div class="pbr-row" style="display:flex; gap:10px;">
+                <div style="flex:1">
+                  <label style="font-size:10px; margin-bottom:4px;">Scale <span class="val" x-text="Math.round((layer.params.scale || 1.0) * 100) + '%'"></span></label>
+                  <input type="range" min="0" max="2" step="0.05" x-model.number="layer.params.scale" @input.debounce.300ms="markChanged()">
+                  <div style="display:flex; gap:3px; margin-top:4px;">
+                    <button class="btn-sm" style="font-size:9px;padding:2px 3px;" @click="layer.params.scale=0.25;markChanged()">25%</button>
+                    <button class="btn-sm" style="font-size:9px;padding:2px 3px;" @click="layer.params.scale=0.5;markChanged()">50%</button>
+                    <button class="btn-sm" style="font-size:9px;padding:2px 3px;" @click="layer.params.scale=1.0;markChanged()">100%</button>
+                  </div>
+                </div>
+                <div style="flex:1">
+                  <label style="font-size:10px; margin-bottom:4px;">Fade Direction</label>
+                  <select x-model="layer.params.fade_direction" @change="markChanged()" style="font-size:11px; padding:6px 8px;">
+                    <option value="none">None</option>
+                    <option value="right">→ Right</option>
+                    <option value="left">← Left</option>
+                    <option value="bottom">↓ Bottom</option>
+                    <option value="top">↑ Top</option>
+                    <option value="center-out">○ Center Out</option>
+                    <option value="edges-in">● Edges In</option>
+                  </select>
+                </div>
               </div>
-              <div style="flex:1">
-                <label style="font-size:10px; margin-bottom:4px;">Position X <span class="val" x-text="Math.round((layer.params.pos_x || 0) * 100) + '%'"></span></label>
-                <input type="range" min="-1" max="1" step="0.05" x-model.number="layer.params.pos_x" @input.debounce.300ms="markChanged()">
-              </div>
-              <div style="flex:1">
-                <label style="font-size:10px; margin-bottom:4px;">Position Y <span class="val" x-text="Math.round((layer.params.pos_y || 0) * 100) + '%'"></span></label>
-                <input type="range" min="-1" max="1" step="0.05" x-model.number="layer.params.pos_y" @input.debounce.300ms="markChanged()">
+              <div class="pbr-row" style="display:flex; gap:10px;">
+                <div style="flex:1">
+                  <label style="font-size:10px; margin-bottom:4px;">Position X <span class="val" x-text="Math.round((layer.params.pos_x || 0) * 100) + '%'"></span></label>
+                  <input type="range" min="-1" max="1" step="0.05" x-model.number="layer.params.pos_x" @input.debounce.300ms="markChanged()">
+                  <div style="display:flex; gap:3px; margin-top:4px;">
+                    <button class="btn-sm" style="font-size:9px;padding:2px 3px;" @click="layer.params.pos_x=-1;markChanged()">-100</button>
+                    <button class="btn-sm" style="font-size:9px;padding:2px 3px;" @click="layer.params.pos_x=-0.5;markChanged()">-50</button>
+                    <button class="btn-sm" style="font-size:9px;padding:2px 3px;" @click="layer.params.pos_x=0;markChanged()">0</button>
+                    <button class="btn-sm" style="font-size:9px;padding:2px 3px;" @click="layer.params.pos_x=0.5;markChanged()">+50</button>
+                    <button class="btn-sm" style="font-size:9px;padding:2px 3px;" @click="layer.params.pos_x=1;markChanged()">+100</button>
+                  </div>
+                </div>
+                <div style="flex:1">
+                  <label style="font-size:10px; margin-bottom:4px;">Position Y <span class="val" x-text="Math.round((layer.params.pos_y || 0) * 100) + '%'"></span></label>
+                  <input type="range" min="-1" max="1" step="0.05" x-model.number="layer.params.pos_y" @input.debounce.300ms="markChanged()">
+                  <div style="display:flex; gap:3px; margin-top:4px;">
+                    <button class="btn-sm" style="font-size:9px;padding:2px 3px;" @click="layer.params.pos_y=-1;markChanged()">-100</button>
+                    <button class="btn-sm" style="font-size:9px;padding:2px 3px;" @click="layer.params.pos_y=-0.5;markChanged()">-50</button>
+                    <button class="btn-sm" style="font-size:9px;padding:2px 3px;" @click="layer.params.pos_y=0;markChanged()">0</button>
+                    <button class="btn-sm" style="font-size:9px;padding:2px 3px;" @click="layer.params.pos_y=0.5;markChanged()">+50</button>
+                    <button class="btn-sm" style="font-size:9px;padding:2px 3px;" @click="layer.params.pos_y=1;markChanged()">+100</button>
+                  </div>
+                </div>
               </div>
             </div>
         </div>
@@ -1068,7 +1131,7 @@ document.addEventListener('alpine:init', () => {
 
     addLayer(type, id, params = {}) {
       // Seed defaults for params that require a valid value to render correctly
-      const defaults = { scale: 1.0, x: 50, y: 50 };
+      const defaults = { scale: 1.0, x: 50, y: 50, fade_direction: 'none' };
       if (id === 'tearing') {
         defaults.fill_pattern   = 'solid';
         defaults.fill_primary   = this.config.primary    || '#1a1a2e';
@@ -1086,6 +1149,10 @@ document.addEventListener('alpine:init', () => {
         roughness: 0.2,
         opacity: 1.0,
         mirror: 'none',
+        use_custom_colors: false,
+        override_primary:   this.config.primary   || '#111111',
+        override_secondary: this.config.secondary || '#e63946',
+        override_accent:    this.config.accent    || '#ffd700',
         params: { ...defaults, ...params }
       };
       this.config.layers.push(layer);
@@ -1094,6 +1161,25 @@ document.addEventListener('alpine:init', () => {
 
     removeLayer(index) {
       this.config.layers.splice(index, 1);
+      this.markChanged();
+    },
+
+    // direction: +1 = up (higher index = rendered on top), -1 = down
+    moveLayer(index, direction) {
+      const target = index + direction;
+      if (target < 0 || target >= this.config.layers.length) return;
+      const layers = this.config.layers;
+      [layers[index], layers[target]] = [layers[target], layers[index]];
+      this.config.layers = [...layers];
+      this.markChanged();
+    },
+
+    duplicateLayer(index) {
+      const clone = JSON.parse(JSON.stringify(this.config.layers[index]));
+      // Remove mirror bookkeeping so the clone is independent
+      delete clone._isMirror;
+      delete clone._parentIdx;
+      this.config.layers.splice(index + 1, 0, clone);
       this.markChanged();
     },
 

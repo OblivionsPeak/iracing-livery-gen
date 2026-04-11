@@ -77,13 +77,22 @@ def build(
         l_roughness = int(layer.get("roughness", 0.1) * 255)
         l_opacity = float(layer.get("opacity", 1.0))
 
+        # Per-layer color overrides — fall back to global palette if not set or toggled off
+        use_custom = bool(layer.get("use_custom_colors"))
+        def _ov(key, fallback):
+            v = layer.get(key, "")
+            return hex_to_rgb(v) if (use_custom and v and len(v) == 7) else fallback
+        l_primary   = _ov("override_primary",   primary)
+        l_secondary = _ov("override_secondary", secondary)
+        l_accent    = _ov("override_accent",    accent)
+
         layer_img = None
         pbr_mask = None
-        
+
         # A. Render the visual contribution
         if l_type == "design":
-            layer_img = _make_design(primary, secondary, accent, l_id, l_params, size=S)
-            
+            layer_img = _make_design(l_primary, l_secondary, l_accent, l_id, l_params, size=S)
+
         elif l_type == "logo":
             lp = l_params.get("path")
             if lp and Path(lp).exists():
@@ -91,12 +100,18 @@ def build(
 
         # Composite and extract PBR
         if layer_img:
+            # Apply flat opacity
             if l_opacity < 1.0:
-                layer_img.putalpha(layer_img.split()[3].point(lambda i: i * l_opacity))
-            
+                layer_img.putalpha(layer_img.split()[3].point(lambda i: int(i * l_opacity)))
+
+            # Apply fade-direction gradient over alpha
+            fade = l_params.get("fade_direction", "none")
+            if fade != "none":
+                layer_img = _apply_fade(layer_img, fade, S)
+
             main_canvas = Image.alpha_composite(main_canvas, layer_img)
-            pbr_mask = layer_img.split()[3] # The precise alpha channel
-            
+            pbr_mask = layer_img.split()[3]
+
             # B. Write PBR metallic/roughness to spec map using the layer's opacity mask
             pbr_fill = Image.new("RGB", (S, S), (l_metallic, l_roughness, 0))
             spec_canvas.paste(pbr_fill, (0, 0), mask=pbr_mask)
@@ -793,6 +808,45 @@ def _draw_hexagon_grid(img, primary, secondary, accent, params, size=DEFAULT_SIZ
             else:
                 color = secondary if (col + row) % 2 == 0 else accent
                 draw.polygon(pts, fill=color)
+
+
+# ---------------------------------------------------------------------------
+# Fade direction mask
+# ---------------------------------------------------------------------------
+
+def _apply_fade(layer_img: Image.Image, direction: str, size: int) -> Image.Image:
+    """
+    Multiply the layer's alpha channel by a linear gradient so the pattern
+    fades out in the given direction.
+    Supported directions: left, right, top, bottom, center-out, edges-in
+    """
+    S = size
+    y_g, x_g = np.mgrid[0:S, 0:S]
+
+    if direction == "right":
+        ramp = x_g / (S - 1)
+    elif direction == "left":
+        ramp = 1.0 - x_g / (S - 1)
+    elif direction == "bottom":
+        ramp = y_g / (S - 1)
+    elif direction == "top":
+        ramp = 1.0 - y_g / (S - 1)
+    elif direction == "center-out":
+        dx = (x_g / (S - 1) - 0.5) * 2
+        dy = (y_g / (S - 1) - 0.5) * 2
+        ramp = np.sqrt(dx**2 + dy**2).clip(0, 1)
+    elif direction == "edges-in":
+        dx = (x_g / (S - 1) - 0.5) * 2
+        dy = (y_g / (S - 1) - 0.5) * 2
+        ramp = 1.0 - np.sqrt(dx**2 + dy**2).clip(0, 1)
+    else:
+        return layer_img
+
+    fade_mask = (ramp * 255).clip(0, 255).astype(np.uint8)
+    orig_alpha = np.array(layer_img.split()[3], dtype=np.uint16)
+    new_alpha = ((orig_alpha * fade_mask) // 255).clip(0, 255).astype(np.uint8)
+    layer_img.putalpha(Image.fromarray(new_alpha))
+    return layer_img
 
 
 # ---------------------------------------------------------------------------
