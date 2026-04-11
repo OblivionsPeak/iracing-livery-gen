@@ -242,7 +242,7 @@ def build_livery():
         from pipeline.livery_builder import build, hex_to_rgb
         img_clean, img_baked, spec_map = build(
             template_path    = tmpl,
-            primary          = hex_to_rgb(data.get("primary",   "#1a1a2e")),
+            primary          = hex_to_rgb(data.get("primary",   "#111111")),
             secondary        = hex_to_rgb(data.get("secondary", "#e63946")),
             accent           = hex_to_rgb(data.get("accent",    "#ffd700")),
             layers           = processed_layers,
