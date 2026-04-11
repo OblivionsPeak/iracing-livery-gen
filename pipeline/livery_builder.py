@@ -470,17 +470,25 @@ def _draw_tearing(img, primary, secondary, accent, params, size=DEFAULT_SIZE):
     c1 = np.array([0, 0, 0, 0], dtype=np.uint8)
     
     fill_pat = params.get("fill_pattern", "solid")
+    
+    # Parse color overrides if present
+    f_sec_str = params.get("fill_secondary", "")
+    f_acc_str = params.get("fill_accent", "")
+    # Note: hex_to_rgb is globally available in livery_builder
+    f_sec = hex_to_rgb(f_sec_str) if f_sec_str else secondary
+    f_acc = hex_to_rgb(f_acc_str) if f_acc_str else accent
+
     if fill_pat == "digital_camo":
         fill_img = Image.new("RGBA", (S, S), (0,0,0,0))
-        _draw_digital_camo(fill_img, primary, secondary, accent, params, size=S)
+        _draw_digital_camo(fill_img, primary, f_sec, f_acc, params, size=S)
         c2 = np.array(fill_img)
     elif fill_pat == "topographic":
         fill_img = Image.new("RGBA", (S, S), (0,0,0,0))
-        _draw_topographic(fill_img, primary, secondary, accent, params, size=S)
+        _draw_topographic(fill_img, primary, f_sec, f_acc, params, size=S)
         c2 = np.array(fill_img)
     elif fill_pat == "circuit":
         fill_img = Image.new("RGBA", (S, S), (0,0,0,0))
-        _draw_circuit(fill_img, primary, secondary, accent, params, size=S)
+        _draw_circuit(fill_img, primary, f_sec, f_acc, params, size=S)
         c2 = np.array(fill_img)
     else:
         c2 = np.array(list(secondary) + [255], dtype=np.uint8)
