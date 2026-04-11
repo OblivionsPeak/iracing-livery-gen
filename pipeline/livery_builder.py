@@ -15,7 +15,7 @@ from pathlib import Path
 import io
 
 import numpy as np
-from PIL import Image, ImageDraw, ImageFilter
+from PIL import Image, ImageDraw, ImageFilter, ImageChops
 
 # Vector support
 DEFAULT_SIZE = 2048
@@ -337,6 +337,14 @@ def _make_design(primary, secondary, accent, design, params, size=DEFAULT_SIZE) 
 
     elif design == "sunburst":
         _draw_sunburst(img, primary, secondary, accent, params, size=S)
+
+    # Universal Offsetting
+    pos_x = float(params.get("pos_x", 0.0))
+    pos_y = float(params.get("pos_y", 0.0))
+    if pos_x != 0.0 or pos_y != 0.0:
+        dx = int(pos_x * S)
+        dy = int(pos_y * S)
+        img = ImageChops.offset(img, dx, dy)
 
     return img
 
