@@ -530,12 +530,20 @@
                </template>
                
                <template x-if="layer.id === 'racing_stripes'">
-                 <div style="margin-top:5px;">
-                   <label>Orientation</label>
-                   <select x-model="layer.params.direction" @change="markChanged()">
-                     <option value="vertical">Vertical (Front-to-Back)</option>
-                     <option value="horizontal">Horizontal (Side-to-Side)</option>
-                   </select>
+                 <div style="display:flex; flex-direction:column; gap:8px; margin-top:5px;">
+                   <div class="row" style="gap:10px;">
+                     <div style="flex:1">
+                       <label>Orientation</label>
+                       <select x-model="layer.params.direction" @change="markChanged()">
+                         <option value="vertical">Vertical (Front-to-Back)</option>
+                         <option value="horizontal">Horizontal (Side-to-Side)</option>
+                       </select>
+                     </div>
+                     <div style="flex:1">
+                       <label>Count <span class="val" x-text="layer.params.count || 3"></span></label>
+                       <input type="range" min="1" max="12" step="1" x-model.number="layer.params.count" @input.debounce.300ms="markChanged()">
+                     </div>
+                   </div>
                  </div>
                </template>
              </div>
@@ -566,6 +574,55 @@
                   <label>H Position <span class="val" x-text="Math.round((layer.params.cx_frac || 0.5) * 100) + '%'"></span></label>
                   <input type="range" min="10" max="90" :value="Math.round((layer.params.cx_frac || 0.5) * 100)"
                     @input="layer.params.cx_frac = $event.target.value / 100; markChanged()">
+                </div>
+              </div>
+            </template>
+
+            <!-- Gradient Settings -->
+            <template x-if="layer.type === 'design' && layer.id === 'gradient'">
+              <div style="display:flex; flex-direction:column; gap:8px; margin-top:5px;">
+                <div class="row" style="gap:10px;">
+                  <div style="flex:1">
+                    <label>Direction</label>
+                    <select x-model="layer.params.direction" @change="markChanged()">
+                      <option value="horizontal">Horizontal</option>
+                      <option value="vertical">Vertical</option>
+                      <option value="angle">Custom Angle</option>
+                    </select>
+                  </div>
+                  <div style="flex:1" x-show="layer.params.direction === 'angle'">
+                    <label>Angle <span class="val" x-text="(layer.params.angle || 45) + '°'"></span></label>
+                    <input type="range" min="0" max="360" step="1" x-model.number="layer.params.angle" @input.debounce.300ms="markChanged()">
+                  </div>
+                </div>
+              </div>
+            </template>
+
+            <!-- Checkered Settings -->
+            <template x-if="layer.type === 'design' && layer.id === 'checkered'">
+              <div class="row" style="gap:10px; margin-top:5px;">
+                <div style="flex:1">
+                  <label>Tile Size <span class="val" x-text="layer.params.tile_size || 64"></span></label>
+                  <input type="range" min="16" max="256" step="8" x-model.number="layer.params.tile_size" @input.debounce.300ms="markChanged()">
+                </div>
+              </div>
+            </template>
+
+            <!-- Honeycomb Settings -->
+            <template x-if="layer.type === 'design' && layer.id === 'hexagon'">
+              <div style="display:flex; flex-direction:column; gap:8px; margin-top:5px;">
+                <div class="row" style="gap:10px;">
+                  <div style="flex:1">
+                    <label>Cell Size <span class="val" x-text="layer.params.tile_size || 40"></span></label>
+                    <input type="range" min="10" max="150" step="5" x-model.number="layer.params.tile_size" @input.debounce.300ms="markChanged()">
+                  </div>
+                  <div style="flex:1">
+                    <label>Style</label>
+                    <select x-model="layer.params.style" @change="markChanged()">
+                      <option value="filled">Filled (Alternating)</option>
+                      <option value="outline">Outline Only</option>
+                    </select>
+                  </div>
                 </div>
               </div>
             </template>
@@ -710,7 +767,8 @@ const DESIGNS = [
   {id:'radial_gradient', name:'Radial', svg:'<svg><circle cx="12" cy="12" r="10" fill="currentColor" fill-opacity="0.5"/></svg>'},
   {id:'harlequin', name:'Harlequin', svg:'<svg><path d="M12 0l6 6-6 6-6-6z M12 12l6 6-6 6-6-6z M0 6l6 6-6 6-6-6z M24 6l-6 6-6-6 6-6z"/></svg>'},
   {id:'pinstripe', name:'Pinstripe', svg:'<svg><path d="M0 20L20 0h2L0 22zM0 10L10 0h2L0 12z" /></svg>'},
-  {id:'number_panel', name:'Num Panel', svg:'<svg><rect width="24" height="24" fill="currentColor" fill-opacity="0.2"/><rect x="6" y="8" width="12" height="8" rx="1"/></svg>'},
+  {id:'checkered', name:'Checkered', svg:'<svg><rect x="0" y="0" width="6" height="6" fill="currentColor"/><rect x="12" y="0" width="6" height="6" fill="currentColor"/><rect x="6" y="6" width="6" height="6" fill="currentColor"/><rect x="18" y="6" width="6" height="6" fill="currentColor"/><rect x="0" y="12" width="6" height="6" fill="currentColor"/><rect x="12" y="12" width="6" height="6" fill="currentColor"/><rect x="6" y="18" width="6" height="6" fill="currentColor"/><rect x="18" y="18" width="6" height="6" fill="currentColor"/></svg>'},
+  {id:'hexagon', name:'Honeycomb', svg:'<svg><path d="M9 2l4 0 2 3.5-2 3.5-4 0-2-3.5z M15 9l4 0 2 3.5-2 3.5-4 0-2-3.5z M3 9l4 0 2 3.5-2 3.5-4 0-2-3.5z M9 16l4 0 2 3.5-2 3.5-4 0-2-3.5z" fill="currentColor" fill-opacity="0.7"/></svg>'},
   {id:'shard', name:'Shard', svg:'<svg><path d="M12 2 L22 12 L12 22 L2 12 Z M12 2 L8 8 L12 14 L16 8 Z" fill="currentColor" fill-opacity="0.7"/></svg>'},
   {id:'tearing', name:'Tearing', svg:'<svg><path d="M2 12 L8 10 L6 8 L12 6 L10 12 L18 10 L16 14 L22 12 L18 20 L4 18 Z" fill="currentColor"/></svg>'},
   {id:'digital_camo', name:'Digi-Camo', svg:'<svg><rect x="2" y="2" width="6" height="6" fill="currentColor"/><rect x="10" y="6" width="6" height="6" fill="currentColor" fill-opacity="0.6"/><rect x="4" y="12" width="8" height="8" fill="currentColor" fill-opacity="0.4"/><rect x="16" y="14" width="6" height="6" fill="currentColor"/></svg>'},
@@ -1012,11 +1070,15 @@ document.addEventListener('alpine:init', () => {
       // Seed defaults for params that require a valid value to render correctly
       const defaults = { scale: 1.0, x: 50, y: 50 };
       if (id === 'tearing') {
-        defaults.fill_pattern  = 'solid';
-        defaults.fill_primary  = this.config.primary   || '#1a1a2e';
-        defaults.fill_secondary = this.config.secondary || '#e63946';
-        defaults.fill_accent   = this.config.accent    || '#ffd700';
+        defaults.fill_pattern   = 'solid';
+        defaults.fill_primary   = this.config.primary    || '#1a1a2e';
+        defaults.fill_secondary = this.config.secondary  || '#e63946';
+        defaults.fill_accent    = this.config.accent     || '#ffd700';
       }
+      if (id === 'gradient')   { defaults.direction = 'horizontal'; defaults.angle = 45; }
+      if (id === 'hexagon')    { defaults.tile_size = 40; defaults.style = 'filled'; }
+      if (id === 'checkered')  { defaults.tile_size = 64; }
+      if (id === 'racing_stripes') { defaults.count = 3; defaults.direction = 'vertical'; }
       const layer = {
         type: type,
         id: id,

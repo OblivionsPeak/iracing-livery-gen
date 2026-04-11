@@ -149,49 +149,33 @@ def _make_design(primary, secondary, accent, design, params, size=DEFAULT_SIZE) 
         pass
 
     elif design == "racing_stripes":
-        # Classic Le Mans style — one wide centre stripe + two thin accents
-        # Angle tilts the stripes; direction controls vertical vs horizontal orientation
-        w = params.get("stripe_width", 160)
-        gap = params.get("gap", 25)
-        angle = params.get("angle", 45)
+        w         = params.get("stripe_width", 160)
+        gap       = params.get("gap", 25)
+        angle     = params.get("angle", 45)
+        count     = max(1, int(params.get("count", 3)))
         direction = params.get("direction", "vertical")
-        shift = int(S * math.tan(math.radians(angle % 180)))
-        hs = shift // 2  # half-shift keeps the stripe visually centred
+        shift     = int(S * math.tan(math.radians(angle % 180)))
+        hs        = shift // 2
 
-        if direction == "horizontal":
-            # Stripes run left-to-right across the canvas
-            cy = S // 2
-            draw.polygon([
-                (0, cy - w // 2 - hs), (S, cy - w // 2 + hs),
-                (S, cy + w // 2 + hs), (0, cy + w // 2 - hs),
-            ], fill=secondary)
-            ay = cy - w // 2 - gap - 40
-            draw.polygon([
-                (0, ay - hs), (S, ay + hs),
-                (S, ay + 40 + hs), (0, ay + 40 - hs),
-            ], fill=accent)
-            by_ = cy + w // 2 + gap
-            draw.polygon([
-                (0, by_ - hs), (S, by_ + hs),
-                (S, by_ + 40 + hs), (0, by_ + 40 - hs),
-            ], fill=accent)
-        else:
-            # Stripes run top-to-bottom (vertical, default)
-            cx = S // 2
-            draw.polygon([
-                (cx - w // 2 - hs, 0), (cx + w // 2 - hs, 0),
-                (cx + w // 2 + hs, S), (cx - w // 2 + hs, S),
-            ], fill=secondary)
-            lx = cx - w // 2 - gap - 40
-            draw.polygon([
-                (lx - hs, 0), (lx + 40 - hs, 0),
-                (lx + 40 + hs, S), (lx + hs, S),
-            ], fill=accent)
-            rx = cx + w // 2 + gap
-            draw.polygon([
-                (rx - hs, 0), (rx + 40 - hs, 0),
-                (rx + 40 + hs, S), (rx + hs, S),
-            ], fill=accent)
+        # Total block of stripes centred on the canvas
+        total = count * w + (count - 1) * gap
+        start = S // 2 - total // 2
+
+        for i in range(count):
+            color = secondary if i % 2 == 0 else accent
+            p0 = start + i * (w + gap)
+            p1 = p0 + w
+
+            if direction == "horizontal":
+                draw.polygon([
+                    (0, p0 - hs), (S, p0 + hs),
+                    (S, p1 + hs), (0, p1 - hs),
+                ], fill=color)
+            else:
+                draw.polygon([
+                    (p0 - hs, 0), (p1 - hs, 0),
+                    (p1 + hs, S), (p0 + hs, S),
+                ], fill=color)
 
     elif design == "diagonal_stripes":
         angle = params.get("angle", 45)
@@ -203,7 +187,8 @@ def _make_design(primary, secondary, accent, design, params, size=DEFAULT_SIZE) 
 
     elif design == "gradient":
         direction = params.get("direction", "horizontal")
-        _draw_gradient(img, primary, secondary, direction, size=S)
+        angle_deg = float(params.get("angle", 45))
+        _draw_gradient(img, primary, secondary, direction, angle_deg, size=S)
 
     elif design == "radial_gradient":
         cx = params.get("cx_frac", 0.5)
@@ -297,30 +282,11 @@ def _make_design(primary, secondary, accent, design, params, size=DEFAULT_SIZE) 
         angle = params.get("angle", 45)
         _draw_diagonal_stripes(draw, secondary, angle, stripe_width, size=S)
 
-    elif design == "number_panel":
-        # High-contrast rectangle zone for the race number (GT endurance style)
-        cx = params.get("cx_frac", 0.5)
-        cy = params.get("cy_frac", 0.5)
-        x0 = int(S * (cx - 0.15))
-        y0 = int(S * (cy - 0.20))
-        x1 = int(S * (cx + 0.15))
-        y1 = int(S * (cy + 0.20))
-        border_w = 12
-        trim_h = 8
-        trim_gap = 20
-        # Solid secondary fill
-        draw.rectangle([x0, y0, x1, y1], fill=secondary)
-        # Thick accent border
-        draw.rectangle([x0, y0, x1, y1], outline=accent, width=border_w)
-        # Thin accent trim lines above and below
-        draw.rectangle(
-            [x0, y0 - trim_gap - trim_h, x1, y0 - trim_gap],
-            fill=accent,
-        )
-        draw.rectangle(
-            [x0, y1 + trim_gap, x1, y1 + trim_gap + trim_h],
-            fill=accent,
-        )
+    elif design == "checkered":
+        _draw_checkered(img, primary, secondary, accent, params, size=S)
+
+    elif design == "hexagon":
+        _draw_hexagon_grid(img, primary, secondary, accent, params, size=S)
 
     elif design == "shard":
         _draw_shards(img, primary, secondary, accent, params, size=S)
@@ -400,18 +366,27 @@ def _draw_diagonal_stripes(draw, color, angle, width, offset_fraction=0.0, size=
             p2 = (d * math.cos(angle_rad) + 2*S * math.sin(angle_rad), d * math.sin(angle_rad) - 2*S * math.cos(angle_rad))
             draw.line([p1, p2], fill=color, width=width)
 
-def _draw_gradient(img, c1, c2, direction="horizontal", size=DEFAULT_SIZE):
-    """Linear color transition."""
+def _draw_gradient(img, c1, c2, direction="horizontal", angle_deg=45, size=DEFAULT_SIZE):
+    """Linear color transition. direction='angle' uses angle_deg for free rotation."""
     S = size
-    grad = Image.new("L", (S, S), 0)
-    draw = ImageDraw.Draw(grad)
-    for i in range(S):
-        draw.line([(0, i), (S, i)] if direction == "vertical" else [(i, 0), (i, S)], 
-                  fill=int(255 * i / S))
-    
-    # Layer 1: Solid c1, Layer 2: Solid c2 with mask
-    layer_c2 = Image.new("RGBA", (S, S), tuple(list(c2) + [255]))
-    img.paste(layer_c2, (0, 0), mask=grad)
+    if direction == "angle":
+        y_g, x_g = np.mgrid[0:S, 0:S]
+        rad = math.radians(angle_deg)
+        # Project each pixel onto the gradient axis; normalise to [0,1]
+        proj = (x_g - S / 2) * math.cos(rad) + (y_g - S / 2) * math.sin(rad)
+        t = (proj / (S * 0.707) * 0.5 + 0.5).clip(0, 1).astype(np.float32)
+        c1a = np.array(list(c1) + [255], dtype=np.float32)
+        c2a = np.array(list(c2) + [255], dtype=np.float32)
+        blended = (c1a * (1 - t[:, :, None]) + c2a * t[:, :, None]).astype(np.uint8)
+        img.paste(Image.fromarray(blended, "RGBA"), (0, 0))
+    else:
+        grad = Image.new("L", (S, S), 0)
+        d = ImageDraw.Draw(grad)
+        for i in range(S):
+            d.line([(0, i), (S, i)] if direction == "vertical" else [(i, 0), (i, S)],
+                   fill=int(255 * i / S))
+        layer_c2 = Image.new("RGBA", (S, S), tuple(list(c2) + [255]))
+        img.paste(layer_c2, (0, 0), mask=grad)
 
 def _draw_radial_gradient(img, c1, c2, cx_f=0.5, cy_f=0.5, size=DEFAULT_SIZE):
     """Circular color transition from focal point."""
@@ -766,6 +741,58 @@ def _draw_sunburst(img, primary, secondary, accent, params, size=DEFAULT_SIZE):
     edges = np.diff(is_sec.astype(np.int8), axis=1, append=0) != 0
     res[edges] = list(accent) + [255]
     img.paste(Image.fromarray(res), (0,0))
+
+
+def _draw_checkered(img, primary, secondary, accent, params, size=DEFAULT_SIZE):
+    """Classic chequered flag grid. Even cells = secondary, odd = transparent (shows base)."""
+    S = size
+    tile = max(4, int(params.get("tile_size", 64) * S / DEFAULT_SIZE))
+    border = max(0, int(params.get("border", 0) * S / DEFAULT_SIZE))
+
+    y_g, x_g = np.mgrid[0:S, 0:S]
+    col = x_g // tile
+    row = y_g // tile
+    is_sec = (col + row) % 2 == 0
+
+    res = np.zeros((S, S, 4), dtype=np.uint8)
+    res[is_sec]  = list(secondary) + [255]
+    # Thin accent border around each cell if requested
+    if border > 0:
+        edge_h = (x_g % tile) < border
+        edge_v = (y_g % tile) < border
+        res[edge_h | edge_v] = list(accent) + [255]
+    img.paste(Image.fromarray(res, "RGBA"), (0, 0))
+
+
+def _draw_hexagon_grid(img, primary, secondary, accent, params, size=DEFAULT_SIZE):
+    """Honeycomb hexagon grid. Pointy-top orientation."""
+    S = size
+    r = max(4, int(params.get("tile_size", 40) * S / DEFAULT_SIZE))
+    style = params.get("style", "filled")  # "filled" or "outline"
+
+    draw = ImageDraw.Draw(img)
+    col_w = int(math.sqrt(3) * r)
+    row_h = int(1.5 * r)
+
+    rows = S // row_h + 3
+    cols = S // col_w + 3
+
+    for row in range(-1, rows):
+        for col in range(-1, cols):
+            offset = col_w // 2 if row % 2 else 0
+            cx = col * col_w + offset
+            cy = row * row_h
+            inner_r = r - 2  # 2px gap between cells
+            pts = [
+                (int(cx + inner_r * math.cos(math.radians(60 * i - 30))),
+                 int(cy + inner_r * math.sin(math.radians(60 * i - 30))))
+                for i in range(6)
+            ]
+            if style == "outline":
+                draw.polygon(pts, outline=secondary)
+            else:
+                color = secondary if (col + row) % 2 == 0 else accent
+                draw.polygon(pts, fill=color)
 
 
 # ---------------------------------------------------------------------------

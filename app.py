@@ -26,8 +26,11 @@ app = Flask(__name__, template_folder="flask_templates")
 app.config["MAX_CONTENT_LENGTH"] = 64 * 1024 * 1024  # 64 MB upload limit
 
 CARS_JSON     = Path("cars.json")
-TEMPLATES_DIR = Path("car_templates")
-LOGOS_DIR     = Path("static/logos")
+# TEMPLATES_DIR / LOGOS_DIR are env-var configurable so a Railway Persistent
+# Volume (mounted at e.g. /data) survives redeploys.
+# In Railway: set TEMPLATES_DIR=/data/car_templates and LOGOS_DIR=/data/logos
+TEMPLATES_DIR = Path(os.environ.get("TEMPLATES_DIR", "car_templates"))
+LOGOS_DIR     = Path(os.environ.get("LOGOS_DIR",     "static/logos"))
 PREVIEWS_DIR  = Path("static/previews")
 
 # Create runtime dirs
