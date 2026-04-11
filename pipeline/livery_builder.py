@@ -546,8 +546,10 @@ def _draw_tearing(img, primary, secondary, accent, params, size=DEFAULT_SIZE):
     
     rng = np.random.default_rng(24)
 
-    # 2. Hard, long anisotropic streaks (stretch along X, high detail along Y, then rotate)
-    base_noise = rng.uniform(-1, 1, (S//2, S//32)).astype(np.float32)
+    # 2. Hard, long anisotropic streaks (v-axis is the detail layer)
+    # Using 128 here instead of 32 for thicker, more intentional 'torn' bands
+    # Stretching the noise on the U axis (S//2) vs high-contrast on V axis (S//128)
+    base_noise = rng.uniform(-1, 1, (S//2, S//128)).astype(np.float32)
     S_large = int(S * 1.5) # Overdraw so rotation doesn't have blank corners
     base_img = Image.fromarray(((base_noise+1)/2*255).astype(np.uint8)).resize((S_large, S_large), Image.BICUBIC)
     
@@ -579,26 +581,30 @@ def _draw_tearing(img, primary, secondary, accent, params, size=DEFAULT_SIZE):
     fill_pat = params.get("fill_pattern", "solid")
     
     # Parse color overrides if present
+    f_pri_str = params.get("fill_primary", "")
     f_sec_str = params.get("fill_secondary", "")
     f_acc_str = params.get("fill_accent", "")
+    
     # Note: hex_to_rgb is globally available in livery_builder
+    f_pri = hex_to_rgb(f_pri_str) if f_pri_str else primary
     f_sec = hex_to_rgb(f_sec_str) if f_sec_str else secondary
     f_acc = hex_to_rgb(f_acc_str) if f_acc_str else accent
 
     if fill_pat == "digital_camo":
         fill_img = Image.new("RGBA", (S, S), (0,0,0,0))
-        _draw_digital_camo(fill_img, primary, f_sec, f_acc, params, size=S)
+        _draw_digital_camo(fill_img, f_pri, f_sec, f_acc, params, size=S)
         c2 = np.array(fill_img)
     elif fill_pat == "topographic":
         fill_img = Image.new("RGBA", (S, S), (0,0,0,0))
-        _draw_topographic(fill_img, primary, f_sec, f_acc, params, size=S)
+        _draw_topographic(fill_img, f_pri, f_sec, f_acc, params, size=S)
         c2 = np.array(fill_img)
     elif fill_pat == "circuit":
         fill_img = Image.new("RGBA", (S, S), (0,0,0,0))
-        _draw_circuit(fill_img, primary, f_sec, f_acc, params, size=S)
+        _draw_circuit(fill_img, f_pri, f_sec, f_acc, params, size=S)
         c2 = np.array(fill_img)
     else:
-        c2 = np.array(list(secondary) + [255], dtype=np.uint8)
+        # Default solid color
+        c2 = np.array(list(f_sec) + [255], dtype=np.uint8)
         
     res = np.where(is_sec[..., None], c2, c1).astype(np.uint8)
     img.paste(Image.fromarray(res), (0, 0))
@@ -629,7 +635,7 @@ def _draw_digital_camo(img, primary, secondary, accent, params, size=DEFAULT_SIZ
     full_mask = choices.repeat(grid_size, axis=0).repeat(grid_size, axis=1)[:S, :S]
     
     res = np.zeros((S, S, 4), dtype=np.uint8)
-    # 0 stays transparent (0,0,0,0)
+    res[full_mask == 0] = list(primary) + [255]
     res[full_mask == 1] = list(secondary) + [255]
     res[full_mask == 2] = list(accent) + [255]
     img.paste(Image.fromarray(res), (0,0))
@@ -686,6 +692,7 @@ def _draw_topographic(img, primary, secondary, accent, params, size=DEFAULT_SIZE
     is_sec  = (noise % (interval * 4)) < (interval * 2) # Large bands
     
     res = np.zeros((S, S, 4), dtype=np.uint8)
+    res[:] = list(primary) + [255]
     res[is_sec] = list(secondary) + [255]
     res[is_line] = list(accent) + [255]
     img.paste(Image.fromarray(res), (0,0))
