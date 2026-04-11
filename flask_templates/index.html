@@ -262,6 +262,35 @@
   .layer-delete:hover { opacity: 1; }
   .pbr-row label { font-size: 10px; text-transform: uppercase; color: var(--text-sec); letter-spacing: 0.05em; }
   .pbr-row .val { color: var(--accent); }
+
+  /* Layer hidden state */
+  .layer-card.layer-hidden { opacity: 0.4; }
+  .layer-card.layer-hidden:hover { opacity: 0.6; }
+
+  /* Preview shimmer overlay */
+  .preview-shimmer {
+    position: absolute; inset: 0; z-index: 5; pointer-events: none;
+    background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.06) 50%, transparent 100%);
+    background-size: 200% 100%;
+    animation: shimmer 1.2s infinite linear;
+  }
+  @keyframes shimmer { from { background-position: -200% 0; } to { background-position: 200% 0; } }
+
+  /* Layer rename input */
+  .layer-name-input {
+    background: transparent; border: none; border-bottom: 1px solid var(--accent);
+    color: var(--text-pri); font-size: 0.9rem; font-weight: 700;
+    padding: 0 2px; width: 140px; outline: none;
+  }
+
+  /* Eye / collapse icon buttons */
+  .icon-btn {
+    background: none; border: none; cursor: pointer; padding: 2px 5px;
+    color: var(--text-muted); font-size: 14px; line-height: 1;
+    transition: color 0.15s;
+  }
+  .icon-btn:hover { color: var(--text-pri); }
+  .icon-btn.active { color: var(--accent); }
 </style>
 </head>
 <body x-data="liveryEditor()" x-init="init()" @keydown.window.ctrl.z.prevent="undo()" @keydown.window.ctrl.y.prevent="redo()">
@@ -387,19 +416,44 @@
 
   <div class="layers-container" style="display:flex; flex-direction: column-reverse; gap:10px;">
     <template x-for="(layer, index) in config.layers" :key="index">
-      <div class="layer-card">
+      <div class="layer-card" :class="{ 'layer-hidden': layer.visible === false }">
         <div class="layer-header">
-           <div style="display:flex; align-items:center; gap:8px;">
-             <strong x-text="layer.type === 'logo' ? (layer.params.filename || 'Logo') : layer.id.charAt(0).toUpperCase() + layer.id.slice(1)"></strong>
+           <div style="display:flex; align-items:center; gap:6px; flex:1; min-width:0;">
+             <!-- Collapse toggle -->
+             <button class="icon-btn" :title="layer.collapsed ? 'Expand' : 'Collapse'" @click="layer.collapsed = !layer.collapsed" style="font-size:10px; padding:2px 4px;">
+               <span x-text="layer.collapsed ? '▶' : '▼'"></span>
+             </button>
+             <!-- Inline rename: click name to edit -->
+             <template x-if="!layer._renaming">
+               <strong x-text="layer.name || (layer.type === 'logo' ? (layer.params.filename || 'Logo') : layer.id.charAt(0).toUpperCase() + layer.id.slice(1))"
+                 @dblclick="layer._renaming = true; $nextTick(() => $el.closest('.layer-header').querySelector('.layer-name-input')?.focus())"
+                 style="cursor:text; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:120px;"
+                 title="Double-click to rename"></strong>
+             </template>
+             <template x-if="layer._renaming">
+               <input class="layer-name-input"
+                 :value="layer.name || (layer.type === 'logo' ? (layer.params.filename || 'Logo') : layer.id.charAt(0).toUpperCase() + layer.id.slice(1))"
+                 @blur="layer.name = $event.target.value || layer.name; layer._renaming = false;"
+                 @keydown.enter="layer.name = $event.target.value || layer.name; layer._renaming = false;"
+                 @keydown.escape="layer._renaming = false;">
+             </template>
            </div>
-           <div style="display:flex; align-items:center; gap:4px;">
-             <button class="btn-sm" style="padding:2px 6px; font-size:11px; width:auto; flex:none;" title="Move up" @click="moveLayer(index, 1)" :disabled="index === config.layers.length - 1" :style="index === config.layers.length - 1 ? 'opacity:0.3' : ''">▲</button>
-             <button class="btn-sm" style="padding:2px 6px; font-size:11px; width:auto; flex:none;" title="Move down" @click="moveLayer(index, -1)" :disabled="index === 0" :style="index === 0 ? 'opacity:0.3' : ''">▼</button>
-             <button class="btn-sm" style="padding:2px 6px; font-size:11px; width:auto; flex:none;" title="Duplicate layer" @click="duplicateLayer(index)">⧉</button>
+           <div style="display:flex; align-items:center; gap:2px; flex-shrink:0;">
+             <!-- Visibility eye -->
+             <button class="icon-btn" :class="{ active: layer.visible !== false }" :title="layer.visible === false ? 'Show layer' : 'Hide layer'"
+               @click="layer.visible = layer.visible === false ? true : false; markChanged()">
+               <span x-text="layer.visible === false ? '🙈' : '👁'"></span>
+             </button>
+             <button class="btn-sm" style="padding:2px 5px; font-size:11px; width:auto; flex:none;" title="Move up" @click="moveLayer(index, 1)" :style="index === config.layers.length - 1 ? 'opacity:0.3' : ''">▲</button>
+             <button class="btn-sm" style="padding:2px 5px; font-size:11px; width:auto; flex:none;" title="Move down" @click="moveLayer(index, -1)" :style="index === 0 ? 'opacity:0.3' : ''">▼</button>
+             <button class="btn-sm" style="padding:2px 5px; font-size:11px; width:auto; flex:none;" title="Duplicate layer" @click="duplicateLayer(index)">⧉</button>
              <button class="layer-delete" @click="removeLayer(index)">&times;</button>
            </div>
         </div>
         
+        <!-- Collapsible body -->
+        <div x-show="!layer.collapsed">
+
         <!-- Shared PBR Controls -->
         <div class="pbr-row" style="display:flex; gap:15px; margin-top:8px;">
            <div style="flex:1">
@@ -706,6 +760,8 @@
               </div>
             </div>
         </div>
+
+        </div><!-- end collapsible body -->
       </div>
     </template>
 
@@ -782,7 +838,8 @@
     
     <!-- 2D View -->
     <div class="preview-wrapper" x-show="viewMode === '2d' || viewMode === 'spec'" x-ref="twoDWrapper" style="position: relative;">
-      <img :src="'/preview/' + (viewMode === 'spec' ? previewBaked.replace('_baked.png', '_spec.png') : (previewBaked || previewClean)) + '?t=' + timestamp" @error="if(previewBaked) previewBaked = null" alt="Livery" style="width: 100%; pointer-events: none; display: block;">
+      <div class="preview-shimmer" x-show="isBuilding"></div>
+      <img :src="'/preview/' + (viewMode === 'spec' ? previewBaked.replace('_baked.png', '_spec.png') : (previewBaked || previewClean)) + '?t=' + timestamp" @error="if(previewBaked) previewBaked = null" alt="Livery" :style="'width: 100%; pointer-events: none; display: block;' + (isBuilding ? 'opacity:0.6; transition:opacity 0.2s;' : 'opacity:1; transition:opacity 0.2s;')">
       
       <template x-for="(layer, idx) in config.layers.filter(l => l.type === 'logo')" :key="idx">
          <img :src="'/static/logos/' + layer.id + '/' + layer.params.filename" 
@@ -1145,6 +1202,9 @@ document.addEventListener('alpine:init', () => {
       const layer = {
         type: type,
         id: id,
+        name: '',
+        visible: true,
+        collapsed: false,
         metallic: 0,
         roughness: 0.2,
         opacity: 1.0,
@@ -1196,7 +1256,7 @@ document.addEventListener('alpine:init', () => {
         grunge_amount: this.config.grunge_amount / 100,
         base_metallic: this.config.base_metallic,
         base_roughness: this.config.base_roughness,
-        layers: this.config.layers
+        layers: this.config.layers.filter(l => l.visible !== false)
       };
     },
 
