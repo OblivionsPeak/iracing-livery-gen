@@ -117,13 +117,12 @@ def build(
     # 4. UV Template (Panel Seams)
     canvas_clean = main_canvas.copy()
     if template_opacity > 0 and template_path.exists():
-        # Step B — if Canny edge mask exists, add crisp seam lines on top
+        # Step A — hard-light blend of full template (shows panel fills + seams)
+        main_canvas = _overlay_template_direct(main_canvas, template_path, template_opacity, size=S)
+        # Step B — crisp seam lines on top via Canny edge mask (if available)
         edge_mask_path = template_path.parent / "edge_mask.png"
         if edge_mask_path.exists():
             main_canvas, _ = _overlay_edge_mask(main_canvas, edge_mask_path, template_opacity, size=S)
-        else:
-            # Fallback to direct template only if edge mask is missing
-            main_canvas = _overlay_template_direct(main_canvas, template_path, template_opacity * 0.5, size=S)
 
     # Return clean/baked visual and the one spec map
     return canvas_clean, main_canvas, spec_canvas
@@ -797,11 +796,14 @@ def _overlay_edge_mask(canvas: Image.Image, edge_mask_path: Path, opacity: float
     if edge_count < 100:
         return canvas, False
 
+    # Adaptive edge color: light lines on dark canvas, dark lines on light canvas
+    canvas_arr = np.array(canvas.convert("RGB"), dtype=np.float32)
+    avg_brightness = canvas_arr.mean() / 255.0
+    edge_rgb = [220, 220, 220] if avg_brightness < 0.5 else [20, 20, 20]
+
+    line_alpha = int(np.clip(opacity * 600, 80, 255))
     overlay = np.zeros((S, S, 4), dtype=np.uint8)
-    # Darker/more visible lines
-    line_alpha = int(np.clip(opacity * 350, 40, 230))
-    # Any white/bright pixel in the mask is an edge line
-    overlay[edges > 80] = [0, 0, 0, line_alpha] # Solid black lines
+    overlay[edges > 20] = [*edge_rgb, line_alpha]
 
     canvas_rgba = canvas.convert("RGBA")
     line_layer = Image.fromarray(overlay, "RGBA")
