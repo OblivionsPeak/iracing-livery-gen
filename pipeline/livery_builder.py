@@ -41,6 +41,8 @@ def build(
     texture_opacity: float = 0.25,
     template_opacity: float = 0.35,
     grunge_amount: float = 0.0,
+    base_metallic: float = 0.0,
+    base_roughness: float = 0.1,
     size: int = DEFAULT_SIZE
 ) -> tuple:
     """
@@ -48,11 +50,14 @@ def build(
     Returns (clean_livery, baked_livery, spec_map)
     """
     S = size
-    # 1. Initialize main (RGB) and spec (PBR) canvases
+    # 1. Initialize main (RGBA) and spec (PBR) canvases
     # Spec Map Channel Map: Red=Metallic, Green=Roughness, Blue=Clearcoat
-    main_canvas = Image.new("RGB", (S, S), primary)
-    # Default spec: metallic=20 (base car paint), roughness=20 (gloss)
-    spec_canvas = Image.new("RGB", (S, S), (20, 20, 0))
+    main_canvas = Image.new("RGBA", (S, S), primary + (255,))
+    
+    # Base spec: metallic and roughness from payload
+    bm = int(base_metallic * 255)
+    br = int(base_roughness * 255)
+    spec_canvas = Image.new("RGB", (S, S), (bm, br, 0))
     
     layer_list = layers or []
     
@@ -63,23 +68,34 @@ def build(
         l_params = layer.get("params", {})
         l_metallic = int(layer.get("metallic", 0) * 255)
         l_roughness = int(layer.get("roughness", 0.1) * 255)
+        l_opacity = float(layer.get("opacity", 1.0))
 
-        # A. Render the visual contribution; capture it so we can reuse it as the PBR mask
+        layer_img = None
         pbr_mask = None
+        
+        # A. Render the visual contribution
         if l_type == "design":
             layer_img = _make_design(primary, secondary, accent, l_id, l_params, size=S)
-            main_canvas.paste(layer_img, (0, 0))
-            pbr_mask = layer_img.convert("L")   # reuse render — no double work
+            
         elif l_type == "logo":
             lp = l_params.get("path")
             if lp and Path(lp).exists():
-                main_canvas = _overlay_logo(main_canvas, lp, l_params, size=S)
-                pbr_mask = _make_logo_mask(lp, l_params, size=S)
+                layer_img = _make_logo_img(lp, l_params, size=S)
 
-        # B. Write PBR metallic/roughness to spec map using the same mask
-        if pbr_mask is not None:
+        # Composite and extract PBR
+        if layer_img:
+            if l_opacity < 1.0:
+                layer_img.putalpha(layer_img.split()[3].point(lambda i: i * l_opacity))
+            
+            main_canvas = Image.alpha_composite(main_canvas, layer_img)
+            pbr_mask = layer_img.split()[3] # The precise alpha channel
+            
+            # B. Write PBR metallic/roughness to spec map using the layer's opacity mask
             pbr_fill = Image.new("RGB", (S, S), (l_metallic, l_roughness, 0))
             spec_canvas.paste(pbr_fill, (0, 0), mask=pbr_mask)
+
+    # Convert main back to RGB for finishing
+    main_canvas = main_canvas.convert("RGB")
 
     # 2. Texture overlay (surface patterns)
     if texture != "none":
@@ -117,7 +133,8 @@ def hex_to_rgb(hex_color: str) -> tuple:
 
 def _make_design(primary, secondary, accent, design, params, size=DEFAULT_SIZE) -> Image.Image:
     S = size
-    img = Image.new("RGB", (S, S), primary)
+    # CRITICAL: Now using RGBA canvas to support proper layer compositing instead of destructive RGB pastes.
+    img = Image.new("RGBA", (S, S), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
 
     if design == "solid":
@@ -213,18 +230,17 @@ def _make_design(primary, secondary, accent, design, params, size=DEFAULT_SIZE) 
         _draw_diagonal_split(draw, secondary, accent, angle, size=S)
 
     elif design == "gradient_chevron":
-        # Gradient fills the chevron shape; solid primary outside
         depth    = params.get("depth", 0.35)
-        feather  = int(params.get("feather", 60))   # 0 = hard edge, 60+ = soft fade
+        feather  = int(params.get("feather", 60))
         h_offset = params.get("h_offset", 0.0)
         v_offset = params.get("v_offset", 0.0)
         px_   = int(S * (0.55 + h_offset))
         half  = int(S * (0.5 + v_offset))
         dy    = int(S * depth)
-        # Build a gradient layer
-        grad = Image.new("RGB", (S, S), primary)
+        
+        grad = Image.new("RGBA", (S, S), (0,0,0,0))
         _draw_gradient(grad, primary, secondary, "horizontal", size=S)
-        # Chevron mask — blur it to feather the edge into the primary color
+        
         mask = Image.new("L", (S, S), 0)
         ImageDraw.Draw(mask).polygon(
             [(0, 0), (px_ - dy, 0), (px_, half), (px_ - dy, S), (0, S)],
@@ -232,7 +248,9 @@ def _make_design(primary, secondary, accent, design, params, size=DEFAULT_SIZE) 
         )
         if feather > 0:
             mask = mask.filter(ImageFilter.GaussianBlur(radius=feather))
-        img.paste(grad, mask=mask)
+            
+        grad.putalpha(mask)
+        img.paste(grad, (0,0), mask=grad)
         # Only draw hard accent line when edge is crisp (feather=0)
         if feather == 0:
             draw.line([(px_ - dy, 0), (px_, half), (px_ - dy, S)], fill=accent, width=max(4, int(18 * S / DEFAULT_SIZE)))
@@ -356,21 +374,22 @@ def _draw_shards(img, primary, secondary, accent, params, size=DEFAULT_SIZE):
     fade_mask = dist < (fade_r * S)
     is_secondary[fade_mask] = False
 
-    c1 = np.array(primary,   dtype=np.float32)
-    c2 = np.array(secondary, dtype=np.float32)
+    c1 = np.array([0, 0, 0, 0], dtype=np.uint8)
+    c2 = np.array(list(secondary) + [255], dtype=np.uint8)
     result = np.where(is_secondary[..., None], c2, c1).astype(np.uint8)
     img.paste(Image.fromarray(result), (0, 0))
 
     # Accent crack lines along shard boundaries
-    edge_h = np.diff(is_secondary.astype(np.int8), axis=1)
-    edge_v = np.diff(is_secondary.astype(np.int8), axis=0)
+    edge_h = np.diff(is_secondary.astype(np.int8), axis=1, append=0)
+    edge_v = np.diff(is_secondary.astype(np.int8), axis=0, append=0)
     crack = np.zeros((S, S), dtype=bool)
-    crack[:, :-1] |= edge_h != 0
-    crack[:-1, :] |= edge_v != 0
+    crack |= edge_h != 0
+    crack |= edge_v != 0
     crack[fade_mask] = False
-    result_arr = np.array(img)
-    result_arr[crack] = np.array(accent, dtype=np.uint8)
-    img.paste(Image.fromarray(result_arr), (0, 0))
+    
+    arr = np.array(img)
+    arr[crack] = np.array(list(accent) + [255], dtype=np.uint8)
+    img.paste(Image.fromarray(arr), (0, 0))
 
 def _draw_tearing(img, primary, secondary, accent, params, size=DEFAULT_SIZE):
     """
@@ -427,21 +446,21 @@ def _draw_tearing(img, primary, secondary, accent, params, size=DEFAULT_SIZE):
     # Combine
     is_sec |= fragment_mask
     
-    c1 = np.array(primary, dtype=np.uint8)
-    c2 = np.array(secondary, dtype=np.uint8)
+    c1 = np.array([0, 0, 0, 0], dtype=np.uint8)
+    c2 = np.array(list(secondary) + [255], dtype=np.uint8)
     res = np.where(is_sec[..., None], c2, c1).astype(np.uint8)
     img.paste(Image.fromarray(res), (0, 0))
     
     # Accent Highlights on Tear Edges
-    edge_h = np.diff(is_sec.astype(np.int8), axis=1)
-    edge_v = np.diff(is_sec.astype(np.int8), axis=0)
+    edge_h = np.diff(is_sec.astype(np.int8), axis=1, append=0)
+    edge_v = np.diff(is_sec.astype(np.int8), axis=0, append=0)
     crack = np.zeros((S, S), dtype=bool)
-    crack[:, :-1] |= edge_h != 0
-    crack[:-1, :] |= edge_v != 0
+    crack |= edge_h != 0
+    crack |= edge_v != 0
     
     # Thin but crisp accent line
     arr = np.array(img)
-    arr[crack] = np.array(accent, dtype=np.uint8)
+    arr[crack] = np.array(list(accent) + [255], dtype=np.uint8)
     img.paste(Image.fromarray(arr), (0, 0))
 
 def _draw_digital_camo(img, primary, secondary, accent, params, size=DEFAULT_SIZE):
@@ -458,10 +477,10 @@ def _draw_digital_camo(img, primary, secondary, accent, params, size=DEFAULT_SIZ
     # Upscale to full canvas
     full_mask = choices.repeat(grid_size, axis=0).repeat(grid_size, axis=1)[:S, :S]
     
-    res = np.zeros((S, S, 3), dtype=np.uint8)
-    res[full_mask == 0] = primary
-    res[full_mask == 1] = secondary
-    res[full_mask == 2] = accent
+    res = np.zeros((S, S, 4), dtype=np.uint8)
+    # 0 stays transparent (0,0,0,0)
+    res[full_mask == 1] = list(secondary) + [255]
+    res[full_mask == 2] = list(accent) + [255]
     img.paste(Image.fromarray(res), (0,0))
 
 def _draw_speed_blur(img, primary, secondary, accent, params, size=DEFAULT_SIZE):
@@ -486,13 +505,12 @@ def _draw_speed_blur(img, primary, secondary, accent, params, size=DEFAULT_SIZE)
     # Distortion
     res_mask = mask > (1.0 - roughness)
     
-    res = np.zeros((S, S, 3), dtype=np.uint8)
-    res[:] = primary
-    res[res_mask] = secondary
+    res = np.zeros((S, S, 4), dtype=np.uint8)
+    res[res_mask] = list(secondary) + [255]
     
     # Thin accent highlight lines
     edges = np.diff(res_mask.astype(np.int8), axis=0, append=0) != 0
-    res[edges] = accent
+    res[edges] = list(accent) + [255]
     img.paste(Image.fromarray(res), (0,0))
 
 def _draw_topographic(img, primary, secondary, accent, params, size=DEFAULT_SIZE):
@@ -516,10 +534,9 @@ def _draw_topographic(img, primary, secondary, accent, params, size=DEFAULT_SIZE
     is_line = (noise % interval) < (0.02 * roughness)
     is_sec  = (noise % (interval * 4)) < (interval * 2) # Large bands
     
-    res = np.zeros((S, S, 3), dtype=np.uint8)
-    res[:] = primary
-    res[is_sec] = secondary
-    res[is_line] = accent
+    res = np.zeros((S, S, 4), dtype=np.uint8)
+    res[is_sec] = list(secondary) + [255]
+    res[is_line] = list(accent) + [255]
     img.paste(Image.fromarray(res), (0,0))
 
 def _draw_circuit(img, primary, secondary, accent, params, size=DEFAULT_SIZE):
@@ -564,10 +581,9 @@ def _draw_splatter(img, primary, secondary, accent, params, size=DEFAULT_SIZE):
     is_sec = arr > (1.1 - roughness)
     is_acc = (arr > (1.08 - roughness)) & (~is_sec)
     
-    res = np.zeros((S, S, 3), dtype=np.uint8)
-    res[:] = primary
-    res[is_sec] = secondary
-    res[is_acc] = accent
+    res = np.zeros((S, S, 4), dtype=np.uint8)
+    res[is_sec] = list(secondary) + [255]
+    res[is_acc] = list(accent) + [255]
     img.paste(Image.fromarray(res), (0,0))
 
 def _draw_sunburst(img, primary, secondary, accent, params, size=DEFAULT_SIZE):
@@ -584,15 +600,13 @@ def _draw_sunburst(img, primary, secondary, accent, params, size=DEFAULT_SIZE):
     wave = np.sin(angle * count)
     is_sec = wave > 0
     
-    res = np.zeros((S, S, 3), dtype=np.uint8)
-    res[:] = primary
-    res[is_sec] = secondary
+    res = np.zeros((S, S, 4), dtype=np.uint8)
+    res[is_sec] = list(secondary) + [255]
     
     # Accent lines on ray edges
     edges = np.diff(is_sec.astype(np.int8), axis=1, append=0) != 0
-    res[edges] = accent
+    res[edges] = list(accent) + [255]
     img.paste(Image.fromarray(res), (0,0))
-
 
 def _draw_diagonal_stripes(draw, color, angle_deg, stripe_width, offset_fraction=0.0, size=DEFAULT_SIZE):
     S = size
@@ -619,9 +633,9 @@ def _draw_diagonal_stripes(draw, color, angle_deg, stripe_width, offset_fraction
 
 def _draw_gradient(img, color1, color2, direction, size=DEFAULT_SIZE):
     S = size
-    arr = np.zeros((S, S, 3), dtype=np.uint8)
-    c1 = np.array(color1, dtype=float)
-    c2 = np.array(color2, dtype=float)
+    arr = np.zeros((S, S, 4), dtype=np.uint8)
+    c1 = np.array([0, 0, 0, 0], dtype=float)
+    c2 = np.array(list(color2) + [255], dtype=float)
     t = np.linspace(0, 1, S)
     band = (c1[None, :] * (1 - t[:, None]) + c2[None, :] * t[:, None]).astype(np.uint8)
     if direction == "horizontal":
@@ -629,22 +643,22 @@ def _draw_gradient(img, color1, color2, direction, size=DEFAULT_SIZE):
     else:
         arr[:] = band[:, None, :]
         arr = arr.transpose(1, 0, 2)
-    img.paste(Image.fromarray(arr), (0, 0))
+    img.paste(Image.fromarray(arr), (0, 0), mask=Image.fromarray(arr))
 
 
 def _draw_radial_gradient(img, color1, color2, cx_frac=0.5, cy_frac=0.5, size=DEFAULT_SIZE):
-    """Circular gradient: color1 at (cx_frac, cy_frac), color2 at radius=1."""
+    """Circular gradient fades from transparent at center to color2 at radius=1."""
     S = size
-    c1 = np.array(color1, dtype=float)
-    c2 = np.array(color2, dtype=float)
+    c1 = np.array([0, 0, 0, 0], dtype=float)
+    c2 = np.array(list(color2) + [255], dtype=float)
     cx = S * cx_frac
     cy = S * cy_frac
-    half = S / 2.0          # normalisation radius stays fixed so scale is consistent
+    half = S / 2.0
     y, x = np.mgrid[0:S, 0:S]
     dist = np.sqrt(((x - cx) / half) ** 2 + ((y - cy) / half) ** 2)
     t = np.clip(dist, 0, 1)[..., None]
     arr = (c1 * (1 - t) + c2 * t).astype(np.uint8)
-    img.paste(Image.fromarray(arr), (0, 0))
+    img.paste(Image.fromarray(arr), (0, 0), mask=Image.fromarray(arr))
 
 
 def _draw_chevron(draw, secondary, accent, depth, h_offset=0.0, v_offset=0.0, size=DEFAULT_SIZE):
@@ -788,23 +802,8 @@ def _overlay_logo(canvas: Image.Image, logo_path, params: dict, size=DEFAULT_SIZ
         target_h = int(target_w * aspect)
         logo = logo.resize((target_w, target_h), Image.LANCZOS)
 
-    # x_frac, y_frac are the CENTER of the logo on the canvas
-    x_frac = params.get("x_frac", 0.5)
-    y_frac = params.get("y_frac", 0.5)
-    x = int(S * x_frac) - logo.width // 2
-    y = int(S * y_frac) - logo.height // 2
-    
-    canvas_rgba = canvas.convert("RGBA")
-    canvas_rgba.paste(logo, (x, y), mask=logo)
-    return canvas_rgba.convert("RGB")
-
-
-# ---------------------------------------------------------------------------
-# PBR & Masking Helpers
-# ---------------------------------------------------------------------------
-
-def _make_logo_mask(logo_path, params: dict, size=DEFAULT_SIZE) -> "Image.Image | None":
-    """Greyscale mask for a logo layer (just its alpha footprint)."""
+def _make_logo_img(logo_path, params: dict, size=DEFAULT_SIZE) -> "Image.Image | None":
+    """Return RGBA canvas containing the placed logo."""
     S = size
     try:
         logo = Image.open(logo_path).convert("RGBA")
@@ -813,13 +812,18 @@ def _make_logo_mask(logo_path, params: dict, size=DEFAULT_SIZE) -> "Image.Image 
         aspect = logo.height / logo.width
         target_h = int(target_w * aspect)
         logo = logo.resize((target_w, target_h), Image.LANCZOS)
-        mask = Image.new("L", (S, S), 0)
+        
+        mirror = params.get("mirror", "none")
+        if mirror == "horizontal":
+            logo = logo.transpose(Image.FLIP_LEFT_RIGHT)
+            
+        img = Image.new("RGBA", (S, S), (0, 0, 0, 0))
         x_frac = params.get("x_frac", params.get("x", 50) / 100)
         y_frac = params.get("y_frac", params.get("y", 50) / 100)
         x = int(S * x_frac) - target_w // 2
         y = int(S * y_frac) - target_h // 2
-        mask.paste(logo.split()[-1], (x, y))
-        return mask
+        img.paste(logo, (x, y))
+        return img
     except Exception:
         return None
 

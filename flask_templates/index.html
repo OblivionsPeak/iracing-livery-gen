@@ -406,6 +406,10 @@
              <label style="font-size:10px; margin-bottom:4px;">Roughness <span class="val" x-text="Math.round(layer.roughness * 100) + '%'"></span></label>
              <input type="range" min="0" max="1" step="0.05" x-model.number="layer.roughness" @input.debounce.300ms="markChanged()">
            </div>
+           <div style="flex:1">
+             <label style="font-size:10px; margin-bottom:4px;">Opacity <span class="val" x-text="Math.round((layer.opacity !== undefined ? layer.opacity : 1.0) * 100) + '%'"></span></label>
+             <input type="range" min="0" max="1" step="0.05" x-model.number="layer.opacity" @input.debounce.300ms="markChanged()">
+           </div>
         </div>
 
         <!-- Layer Specific Settings -->
@@ -563,7 +567,17 @@
   <div class="section-title">Material Finish</div>
   <div class="row">
     <div>
-      <label style="margin-top:0;">Surface</label>
+      <label style="margin-top:0;">Base Metallic <span class="val" x-text="Math.round(config.base_metallic * 100) + '%'"></span></label>
+      <input type="range" min="0" max="1" step="0.05" style="margin-top:4px;" x-model.number="config.base_metallic" @input.debounce.300ms="markChanged()">
+    </div>
+    <div>
+      <label style="margin-top:0;">Base Roughness <span class="val" x-text="Math.round(config.base_roughness * 100) + '%'"></span></label>
+      <input type="range" min="0" max="1" step="0.05" style="margin-top:4px;" x-model.number="config.base_roughness" @input.debounce.300ms="markChanged()">
+    </div>
+  </div>
+  <div class="row" style="margin-top: 10px;">
+    <div>
+      <label style="margin-top:0;">Surface Overlay</label>
       <select x-model="config.texture" @change="markChanged()">
         <option value="none">Clearcoat (Gloss)</option>
         <option value="matte">Matte</option>
@@ -593,15 +607,16 @@
 
   <!-- View Toggle Tabs -->
   <div class="view-tabs">
-    <div class="view-tab" :class="{'active': viewMode === '2d'}" @click="viewMode = '2d'">2D Mapping</div>
-    <div class="view-tab" :class="{'active': viewMode === '3d'}" @click="viewMode = '3d'">3D Decal Viewer</div>
+    <div class="view-tab" :class="{active: viewMode === '2d'}" @click="viewMode = '2d'">2D Livery</div>
+    <div class="view-tab" :class="{active: viewMode === 'spec'}" @click="viewMode = 'spec'">2D Spec Map</div>
+    <div class="view-tab" :class="{active: viewMode === '3d'}" @click="viewMode = '3d'; $nextTick(() => { if (!threeRenderer) initThree(); })">3D Preview</div>
   </div>
 
-    <div id="results" class="result-card" x-show="previewClean || previewBaked" x-cloak>
+  <div id="results" class="result-card" x-show="previewClean || previewBaked" x-cloak>
     
     <!-- 2D View -->
-    <div class="preview-wrapper" x-show="viewMode === '2d'" x-ref="twoDWrapper" style="position: relative;">
-      <img :src="'/preview/' + (previewBaked || previewClean) + '?t=' + timestamp" @error="if(previewBaked) previewBaked = null" alt="Livery" style="width: 100%; pointer-events: none; display: block;">
+    <div class="preview-wrapper" x-show="viewMode === '2d' || viewMode === 'spec'" x-ref="twoDWrapper" style="position: relative;">
+      <img :src="'/preview/' + (viewMode === 'spec' ? previewBaked.replace('_baked.png', '_spec.png') : (previewBaked || previewClean)) + '?t=' + timestamp" @error="if(previewBaked) previewBaked = null" alt="Livery" style="width: 100%; pointer-events: none; display: block;">
       
       <template x-for="(layer, idx) in config.layers.filter(l => l.type === 'logo')" :key="idx">
          <img :src="'/static/logos/' + layer.id + '/' + layer.params.filename" 
@@ -700,6 +715,8 @@ document.addEventListener('alpine:init', () => {
       texture_opacity: 25,
       template_opacity: 35,
       grunge_amount: 0,
+      base_metallic: 0.05,
+      base_roughness: 0.15,
       layers: [
         { type: 'design', id: 'solid', metallic: 0.1, roughness: 0.5, params: {} }
       ]
@@ -951,6 +968,7 @@ document.addEventListener('alpine:init', () => {
         id: id,
         metallic: 0,
         roughness: 0.2,
+        opacity: 1.0,
         mirror: 'none',
         params: {
           scale: 20,
@@ -979,6 +997,8 @@ document.addEventListener('alpine:init', () => {
         texture_opacity: this.config.texture_opacity / 100,
         template_opacity: this.config.template_opacity / 100,
         grunge_amount: this.config.grunge_amount / 100,
+        base_metallic: this.config.base_metallic,
+        base_roughness: this.config.base_roughness,
         layers: this.config.layers
       };
     },

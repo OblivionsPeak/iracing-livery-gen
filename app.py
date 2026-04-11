@@ -250,6 +250,8 @@ def build_livery():
             texture_opacity  = texture_opacity,
             template_opacity = template_opacity,
             grunge_amount    = _clamp(data.get("grunge_amount", 0.0), 0.0, 1.0, 0.0),
+            base_metallic    = float(data.get("base_metallic", 0.0)),
+            base_roughness   = float(data.get("base_roughness", 0.1)),
             size             = 1024 # PREVIEW SCALE: 4x faster than 2048
         )
     except Exception as e:
@@ -363,6 +365,8 @@ def export_tga():
         texture_opacity = float(data.get("texture_opacity", 0.25)),
         template_opacity = 0, # FORCE NO WIREFRAMES FOR TGA
         grunge_amount = float(data.get("grunge_amount", 0.0)),
+        base_metallic = float(data.get("base_metallic", 0.0)),
+        base_roughness = float(data.get("base_roughness", 0.1)),
         size = 2048 # MASTER EXPORT RESOLUTION
     )
 
