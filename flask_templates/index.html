@@ -535,7 +535,7 @@
     
     <!-- 2D View -->
     <div class="preview-wrapper" x-show="viewMode === '2d'" x-ref="twoDWrapper" style="position: relative;">
-      <img :src="'/preview/' + (previewClean || previewBaked) + '?t=' + timestamp" @error="if(previewClean) previewClean = null" alt="Livery" style="width: 100%; pointer-events: none; display: block;">
+      <img :src="'/preview/' + (previewBaked || previewClean) + '?t=' + timestamp" @error="if(previewBaked) previewBaked = null" alt="Livery" style="width: 100%; pointer-events: none; display: block;">
       
       <template x-for="(layer, idx) in config.layers.filter(l => l.type === 'logo')" :key="idx">
          <img :src="'/static/logos/' + layer.id + '/' + layer.params.filename" 

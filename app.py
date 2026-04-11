@@ -228,6 +228,22 @@ def build_livery():
             "opacity": l.get("opacity", 1.0)
         })
 
+    # Debug: inspect template before build
+    tmpl_debug = {}
+    if tmpl.exists():
+        from PIL import Image as _PI
+        _ta = np.array(_PI.open(tmpl).convert("L"))
+        tmpl_debug["grey_min"]        = int(_ta.min())
+        tmpl_debug["grey_max"]        = int(_ta.max())
+        tmpl_debug["grey_mean"]       = round(float(_ta.mean()), 1)
+        tmpl_debug["dark_pixels_pct"] = round(float((_ta < 50).mean() * 100), 2)
+        _ep = tmpl.parent / "edge_mask.png"
+        if _ep.exists():
+            _ea = np.array(_PI.open(_ep).convert("L"))
+            tmpl_debug["edge_pixels"] = int((_ea > 20).sum())
+        else:
+            tmpl_debug["edge_pixels"] = "no edge_mask.png"
+
     try:
         from pipeline.livery_builder import build, hex_to_rgb
         img_clean, img_baked, spec_map = build(
