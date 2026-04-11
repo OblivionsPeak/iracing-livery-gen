@@ -27,6 +27,13 @@ def _get_noise(size, scale=100.0):
     return rng.standard_normal((size, size))
 
 
+def hex_to_rgb(hex_str: str) -> tuple:
+    """Utility to convert #RRGGBB to (R, G, B) tuple."""
+    if not hex_str: return (0, 0, 0)
+    h = hex_str.lstrip('#')
+    return tuple(int(h[i:i+2], 16) for i in (0, 2, 4))
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -367,6 +374,100 @@ def _make_design(primary, secondary, accent, design, params, size=DEFAULT_SIZE) 
     return img
 
 
+def _draw_diagonal_stripes(draw, color, angle, width, offset_fraction=0.0, size=DEFAULT_SIZE):
+    """Utility to draw repeated diagonal lines across the whole canvas."""
+    S = size
+    angle_rad = math.radians(angle)
+    # Distance between stripe centers
+    stride = width * 2
+    
+    # Range that covers the whole viewport after rotation
+    diag = int(S * 1.5)
+    for i in range(-diag, diag, stride):
+        d = i + offset_fraction * stride
+        # Line: x*cos + y*sin = d
+        # Find intersections with image boundaries
+        if math.sin(angle_rad) == 0: # vertical
+            draw.line([(d, 0), (d, S)], fill=color, width=width)
+        elif math.cos(angle_rad) == 0: # horizontal
+            draw.line([(0, d), (S, d)], fill=color, width=width)
+        else:
+            # General case: draw a long enough line
+            p1 = (d * math.cos(angle_rad) - 2*S * math.sin(angle_rad), d * math.sin(angle_rad) + 2*S * math.cos(angle_rad))
+            p2 = (d * math.cos(angle_rad) + 2*S * math.sin(angle_rad), d * math.sin(angle_rad) - 2*S * math.cos(angle_rad))
+            draw.line([p1, p2], fill=color, width=width)
+
+def _draw_gradient(img, c1, c2, direction="horizontal", size=DEFAULT_SIZE):
+    """Linear color transition."""
+    S = size
+    grad = Image.new("L", (S, S), 0)
+    draw = ImageDraw.Draw(grad)
+    for i in range(S):
+        draw.line([(0, i), (S, i)] if direction == "vertical" else [(i, 0), (i, S)], 
+                  fill=int(255 * i / S))
+    
+    # Layer 1: Solid c1, Layer 2: Solid c2 with mask
+    layer_c2 = Image.new("RGBA", (S, S), tuple(list(c2) + [255]))
+    img.paste(layer_c2, (0, 0), mask=grad)
+
+def _draw_radial_gradient(img, c1, c2, cx_f=0.5, cy_f=0.5, size=DEFAULT_SIZE):
+    """Circular color transition from focal point."""
+    S = size
+    y, x = np.mgrid[0:S, 0:S]
+    dist = np.sqrt((x - cx_f*S)**2 + (y - cy_f*S)**2)
+    mask_arr = (dist / (S * 0.7) * 255).clip(0, 255).astype(np.uint8)
+    mask = Image.fromarray(mask_arr)
+    
+    layer_c2 = Image.new("RGBA", (S, S), tuple(list(c2) + [255]))
+    img.paste(layer_c2, (0, 0), mask=mask)
+
+def _draw_chevron(draw, secondary, accent, depth, h_off, v_off, size=DEFAULT_SIZE):
+    """Modern V-shaped design."""
+    S = size
+    px = int(S * (0.5 + h_off))
+    py = int(S * (0.5 + v_off))
+    dy = int(S * depth)
+    pts = [(0, py - dy), (px, py), (0, py + dy), (0, S), (S, S), (S, 0), (0, 0)]
+    draw.polygon(pts, fill=secondary)
+    draw.line([(0, py - dy), (px, py), (0, py + dy)], fill=accent, width=max(2, int(12 * S / DEFAULT_SIZE)))
+
+def _draw_diagonal_split(draw, color2, accent, angle, size=DEFAULT_SIZE):
+    """Two-tone diagonal cut."""
+    S = size
+    rad = math.radians(angle)
+    # Simplified: draw a giant polygon covering half the screen
+    dist = S * 1.5
+    p1 = (int(S/2 - dist*math.cos(rad+math.pi/2)), int(S/2 - dist*math.sin(rad+math.pi/2)))
+    p2 = (int(S/2 + dist*math.cos(rad+math.pi/2)), int(S/2 + dist*math.sin(rad+math.pi/2)))
+    # Polygon that covers everything "below" the line
+    pts = [p1, p2, (S*2, S*2), (-S, S*2)]
+    draw.polygon(pts, fill=color2)
+    draw.line([p1, p2], fill=accent, width=max(2, int(8 * S / DEFAULT_SIZE)))
+
+
+def _draw_sweep(draw, img, secondary, accent, params, size=DEFAULT_SIZE):
+    """Dynamic angular band sweeping front-low to rear-high — common GT style."""
+    S = size
+    h_offset = params.get("h_offset", 0.0)
+    pts_main = [
+        (0, int(S * 0.55)),
+        (int(S * (0.50 + h_offset)), 0),
+        (S, 0),
+        (S, int(S * 0.35)),
+        (int(S * (0.55 + h_offset)), S),
+        (0, S),
+    ]
+    draw.polygon(pts_main, fill=secondary)
+    # Accent stripe at the leading edge of the sweep
+    pts_accent = [
+        (0, int(S * 0.52)),
+        (int(S * (0.47 + h_offset)), 0),
+        (int(S * (0.50 + h_offset)), 0),
+        (0, int(S * 0.55)),
+    ]
+    draw.polygon(pts_accent, fill=accent)
+
+
 def _draw_shards(img, primary, secondary, accent, params, size=DEFAULT_SIZE):
     """Tearing/fragmentation effect — aggressive car wrap style radiating from focal point."""
     S = size
@@ -385,8 +486,8 @@ def _draw_shards(img, primary, secondary, accent, params, size=DEFAULT_SIZE):
     dist = np.sqrt(dx**2 + dy**2)
     angle = np.arctan2(dy, dx)
 
-    rng = np.random.default_rng(42)
-    noise_map = rng.standard_normal((S, S)).astype(np.float32)
+    rng = np.random.default_rng(24)
+    noise_map = rng.standard_normal((S//2, S//2)).astype(np.float32)
     noise_img = Image.fromarray(((noise_map + 3) / 6 * 255).clip(0, 255).astype(np.uint8), mode='L')
     noise_img = noise_img.filter(ImageFilter.GaussianBlur(radius=max(1, int(40 * S / DEFAULT_SIZE))))
     noise_smooth = (np.array(noise_img, dtype=np.float32) / 255.0 - 0.5) * 2.0
@@ -416,6 +517,9 @@ def _draw_shards(img, primary, secondary, accent, params, size=DEFAULT_SIZE):
     arr = np.array(img)
     arr[crack] = np.array(list(accent) + [255], dtype=np.uint8)
     img.paste(Image.fromarray(arr), (0, 0))
+
+    img.paste(Image.fromarray(arr), (0, 0))
+
 
 def _draw_tearing(img, primary, secondary, accent, params, size=DEFAULT_SIZE):
     """
@@ -630,6 +734,7 @@ def _draw_splatter(img, primary, secondary, accent, params, size=DEFAULT_SIZE):
     res[is_acc] = list(accent) + [255]
     img.paste(Image.fromarray(res), (0,0))
 
+
 def _draw_sunburst(img, primary, secondary, accent, params, size=DEFAULT_SIZE):
     """Radial rays originating from a focal point."""
     S = size
@@ -651,117 +756,6 @@ def _draw_sunburst(img, primary, secondary, accent, params, size=DEFAULT_SIZE):
     edges = np.diff(is_sec.astype(np.int8), axis=1, append=0) != 0
     res[edges] = list(accent) + [255]
     img.paste(Image.fromarray(res), (0,0))
-
-def _draw_diagonal_stripes(draw, color, angle_deg, stripe_width, offset_fraction=0.0, size=DEFAULT_SIZE):
-    S = size
-    angle_rad = math.radians(angle_deg % 180)
-    if abs(math.sin(angle_rad)) < 0.01:
-        period = stripe_width * 2
-        start = int(offset_fraction * period)
-        for x in range(start - S, S * 2, period):
-            draw.rectangle([x, 0, x + stripe_width, S], fill=color)
-        return
-
-    tan_a = math.tan(angle_rad)
-    period = stripe_width * 2
-    offset_px = int(offset_fraction * period)
-    for i in range(offset_px - S * 2, S * 2, period):
-        pts = [
-            (i, 0),
-            (i + stripe_width, 0),
-            (i + stripe_width + int(S * tan_a), S),
-            (i + int(S * tan_a), S),
-        ]
-        draw.polygon(pts, fill=color)
-
-
-def _draw_gradient(img, color1, color2, direction, size=DEFAULT_SIZE):
-    S = size
-    arr = np.zeros((S, S, 4), dtype=np.uint8)
-    c1 = np.array([0, 0, 0, 0], dtype=float)
-    c2 = np.array(list(color2) + [255], dtype=float)
-    t = np.linspace(0, 1, S)
-    band = (c1[None, :] * (1 - t[:, None]) + c2[None, :] * t[:, None]).astype(np.uint8)
-    if direction == "horizontal":
-        arr[:] = band
-    else:
-        arr[:] = band[:, None, :]
-        arr = arr.transpose(1, 0, 2)
-    img.paste(Image.fromarray(arr), (0, 0), mask=Image.fromarray(arr))
-
-
-def _draw_radial_gradient(img, color1, color2, cx_frac=0.5, cy_frac=0.5, size=DEFAULT_SIZE):
-    """Circular gradient fades from transparent at center to color2 at radius=1."""
-    S = size
-    c1 = np.array([0, 0, 0, 0], dtype=float)
-    c2 = np.array(list(color2) + [255], dtype=float)
-    cx = S * cx_frac
-    cy = S * cy_frac
-    half = S / 2.0
-    y, x = np.mgrid[0:S, 0:S]
-    dist = np.sqrt(((x - cx) / half) ** 2 + ((y - cy) / half) ** 2)
-    t = np.clip(dist, 0, 1)[..., None]
-    arr = (c1 * (1 - t) + c2 * t).astype(np.uint8)
-    img.paste(Image.fromarray(arr), (0, 0), mask=Image.fromarray(arr))
-
-
-def _draw_chevron(draw, secondary, accent, depth, h_offset=0.0, v_offset=0.0, size=DEFAULT_SIZE):
-    S = size
-    px = int(S * (0.55 + h_offset))
-    half = int(S * (0.5 + v_offset))
-    dy = int(S * depth)
-    # Secondary region (left/front of chevron)
-    pts = [
-        (0, 0),
-        (px - dy, 0),
-        (px, half),
-        (px - dy, S),
-        (0, S),
-    ]
-    draw.polygon(pts, fill=secondary)
-    # Accent outline (removed thick line for cleaner look)
-    # draw.line([(px - dy, 0), (px, half), (px - dy, SIZE)], fill=accent, width=4)
-
-
-def _draw_sweep(draw, img, secondary, accent, params, size=DEFAULT_SIZE):
-    """Dynamic angular band sweeping front-low to rear-high — common GT style."""
-    S = size
-    h_offset = params.get("h_offset", 0.0)
-    pts_main = [
-        (0, int(S * 0.55)),
-        (int(S * (0.50 + h_offset)), 0),
-        (S, 0),
-        (S, int(S * 0.35)),
-        (int(S * (0.55 + h_offset)), S),
-        (0, S),
-    ]
-    draw.polygon(pts_main, fill=secondary)
-    # Accent stripe at the leading edge of the sweep
-    pts_accent = [
-        (0, int(S * 0.52)),
-        (int(S * (0.47 + h_offset)), 0),
-        (int(S * (0.50 + h_offset)), 0),
-        (0, int(S * 0.55)),
-    ]
-    draw.polygon(pts_accent, fill=accent)
-
-
-def _draw_diagonal_split(draw, secondary, accent, angle_deg, size=DEFAULT_SIZE):
-    """Clean diagonal two-tone split."""
-    S = size
-    angle_rad = math.radians(angle_deg)
-    tan_a = math.tan(angle_rad)
-    mid = S // 2
-    offset = int(mid * tan_a)
-    pts = [
-        (0, 0),
-        (S, 0),
-        (S, mid - offset),
-        (0, mid + offset),
-    ]
-    draw.polygon(pts, fill=secondary)
-    # Optional: Accent divider line (removed for cleaner two_tone)
-    # draw.line([(0, mid + offset), (SIZE, mid - offset)], fill=accent, width=14)
 
 
 # ---------------------------------------------------------------------------
