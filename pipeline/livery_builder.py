@@ -117,12 +117,14 @@ def build(
     # 4. UV Template (Panel Seams)
     canvas_clean = main_canvas.copy()
     if template_opacity > 0 and template_path.exists():
-        # Step A — hard-light blend of full template (shows panel fills + seams)
-        main_canvas = _overlay_template_direct(main_canvas, template_path, template_opacity, size=S)
-        # Step B — crisp seam lines on top via Canny edge mask (if available)
         edge_mask_path = template_path.parent / "edge_mask.png"
+        
         if edge_mask_path.exists():
+            # If we have a crisp wireframe mask, use only that to avoid the template's background color (e.g. blue)
             main_canvas, _ = _overlay_edge_mask(main_canvas, edge_mask_path, template_opacity, size=S)
+        else:
+            # Fallback to direct hard-light overlay if edge mask generation failed
+            main_canvas = _overlay_template_direct(main_canvas, template_path, template_opacity, size=S)
 
     # Return clean/baked visual and the one spec map
     return canvas_clean, main_canvas, spec_canvas
