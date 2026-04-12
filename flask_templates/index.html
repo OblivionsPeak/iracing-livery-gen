@@ -398,6 +398,40 @@
     <button class="btn-sm" @click="shareConfig()">Copy URL Link</button>
   </div>
 
+  <!-- Named Saves -->
+  <div style="margin-top:12px; position:relative;">
+    <div style="display:flex; gap:6px;">
+      <input type="text" x-model="saveNameInput" placeholder="Design name..." @keydown.enter="saveDesignAs()"
+        style="flex:1; padding:7px 10px; font-size:0.8rem;">
+      <button class="btn-sm gold" style="flex:none; white-space:nowrap;" @click="saveDesignAs()">Save Design</button>
+      <button class="btn-sm" style="flex:none; white-space:nowrap;" @click="showSavesPanel = !showSavesPanel; loadSavedDesigns()">
+        Load <span x-text="savedDesigns.length ? '(' + savedDesigns.length + ')' : ''"></span>
+      </button>
+    </div>
+
+    <!-- Saves dropdown -->
+    <div x-show="showSavesPanel" x-cloak @click.outside="showSavesPanel = false"
+      style="position:absolute; left:0; right:0; top:100%; margin-top:4px; z-index:100;
+             background:var(--bg-surface); border:1px solid var(--border); border-radius:var(--radius);
+             box-shadow:0 8px 24px rgba(0,0,0,0.5); max-height:260px; overflow-y:auto;">
+      <template x-if="savedDesigns.length === 0">
+        <div style="padding:16px; text-align:center; color:var(--text-muted); font-size:0.8rem;">No saved designs yet.</div>
+      </template>
+      <template x-for="(s, i) in savedDesigns" :key="s.name">
+        <div style="display:flex; align-items:center; gap:8px; padding:10px 12px; border-bottom:1px solid var(--border); cursor:pointer;"
+             :style="i === savedDesigns.length-1 ? 'border-bottom:none' : ''"
+             @mouseenter="$el.style.background='var(--bg-surface-hover)'"
+             @mouseleave="$el.style.background=''">>
+          <div style="flex:1; min-width:0;" @click="loadSavedDesign(s)">
+            <div style="font-size:0.85rem; font-weight:600; color:var(--text-pri);" x-text="s.name"></div>
+            <div style="font-size:0.7rem; color:var(--text-muted);" x-text="s.savedAt"></div>
+          </div>
+          <button class="icon-btn" style="color:#ef4444; flex:none;" title="Delete" @click.stop="deleteSavedDesign(s.name); loadSavedDesigns()">&times;</button>
+        </div>
+      </template>
+    </div>
+  </div>
+
   <!-- DESIGN PATTERN -->
   <div class="section-title">Add Background Design</div>
   <div class="design-grid">
@@ -855,7 +889,7 @@
     <div class="result-footer">
       <span class="result-label" x-text="previewBaked"></span>
       <div style="display:flex;gap:6px;">
-        <button class="btn-export" @click="exportiRacingDirect()">Export to iRacing</button>
+        <button class="btn-export" @click="exportiRacingDirect()" x-show="isLocalhost" title="Writes directly to ~/Documents/iRacing/paint/">Export to iRacing</button>
         <a class="btn-dl" :href="'/download/' + previewBaked" :download="previewBaked">Download PNG</a>
       </div>
     </div>
@@ -923,6 +957,17 @@ document.addEventListener('alpine:init', () => {
     threeScene: null,
     threeMaterial: null,
 
+    // Abort controller for in-flight builds
+    _buildController: null,
+
+    // True when running locally — enables direct iRacing export
+    isLocalhost: location.hostname === 'localhost' || location.hostname === '127.0.0.1',
+
+    // Named saves
+    savedDesigns: [],
+    showSavesPanel: false,
+    saveNameInput: '',
+
     // Core Config State
     history: [],
     historyIndex: -1,
@@ -947,6 +992,7 @@ document.addEventListener('alpine:init', () => {
     },
 
     init() {
+      this.loadSavedDesigns();
       // 1. Try URL load
       const param = new URLSearchParams(location.search).get('c');
       if (param) {
@@ -1186,6 +1232,41 @@ document.addEventListener('alpine:init', () => {
       reader.readAsText(file);
     },
 
+    // -----------------------------------------------------------------------
+    // Named saves
+    // -----------------------------------------------------------------------
+    loadSavedDesigns() {
+      try { this.savedDesigns = JSON.parse(localStorage.getItem('iRacingLiverySaves') || '[]'); }
+      catch(e) { this.savedDesigns = []; }
+    },
+
+    saveDesignAs() {
+      const name = this.saveNameInput.trim();
+      if (!name) return;
+      this.loadSavedDesigns();
+      // Replace existing entry with same name
+      const idx = this.savedDesigns.findIndex(s => s.name === name);
+      const entry = { name, savedAt: new Date().toLocaleString(), config: JSON.parse(JSON.stringify(this.config)) };
+      if (idx >= 0) this.savedDesigns[idx] = entry;
+      else this.savedDesigns.unshift(entry);
+      localStorage.setItem('iRacingLiverySaves', JSON.stringify(this.savedDesigns));
+      this.saveNameInput = '';
+      this.showToast(`✓ Saved "${name}"`);
+    },
+
+    loadSavedDesign(entry) {
+      Object.assign(this.config, JSON.parse(JSON.stringify(entry.config)));
+      this.showSavesPanel = false;
+      this.markChanged();
+      this.showToast(`Loaded "${entry.name}"`);
+    },
+
+    deleteSavedDesign(name) {
+      this.savedDesigns = this.savedDesigns.filter(s => s.name !== name);
+      localStorage.setItem('iRacingLiverySaves', JSON.stringify(this.savedDesigns));
+    },
+
+    // -----------------------------------------------------------------------
     addLayer(type, id, params = {}) {
       // Seed defaults for params that require a valid value to render correctly
       const defaults = { scale: 1.0, x: 50, y: 50, fade_direction: 'none' };
@@ -1262,22 +1343,29 @@ document.addEventListener('alpine:init', () => {
 
     async triggerBuild(isManual) {
       if (!this.activeCar) return;
+      // Cancel any in-flight build before starting a new one
+      if (this._buildController) this._buildController.abort();
+      this._buildController = new AbortController();
       if (isManual) {
         this.isBuilding = true;
         this.statusMsg = '';
       }
       try {
-        const r = await fetch('/build', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(this.getPayload()) });
+        const r = await fetch('/build', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(this.getPayload()),
+          signal: this._buildController.signal
+        });
         const d = await r.json();
         if (d.error) throw new Error(d.error);
         this.statusError = false;
         this.previewClean = d.image_clean;
         this.previewBaked = d.image_baked;
         this.timestamp = Date.now() + "_" + Math.floor(Math.random() * 100000);
-        if (this.viewMode === '3d') {
-            this.updateThreeTexture();
-        }
+        if (this.viewMode === '3d') this.updateThreeTexture();
       } catch(e) {
+        if (e.name === 'AbortError') return; // silently ignore cancelled builds
         this.statusError = true;
         this.statusMsg = 'Error: ' + e.message;
       } finally {
