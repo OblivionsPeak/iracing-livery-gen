@@ -486,6 +486,7 @@ def _draw_shards(img, primary, secondary, accent, params, size=DEFAULT_SIZE):
     rng = np.random.default_rng(24)
     noise_map = rng.standard_normal((S//2, S//2)).astype(np.float32)
     noise_img = Image.fromarray(((noise_map + 3) / 6 * 255).clip(0, 255).astype(np.uint8), mode='L')
+    noise_img = noise_img.resize((S, S), Image.BICUBIC)
     noise_img = noise_img.filter(ImageFilter.GaussianBlur(radius=max(1, int(40 * S / DEFAULT_SIZE))))
     noise_smooth = (np.array(noise_img, dtype=np.float32) / 255.0 - 0.5) * 2.0
 
