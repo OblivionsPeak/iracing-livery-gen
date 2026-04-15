@@ -104,6 +104,14 @@ document.addEventListener('alpine:init', () => {
                         Object.assign(this.config, JSON.parse(saved));
                     } catch(e) {}
                 }
+                // Restore activeCar separately
+                const savedCar = localStorage.getItem('iRacingActiveCar');
+                if (savedCar) {
+                    this.activeCar = savedCar;
+                    this.templateStatus = `✓ Template ready (${this.activeCar})`;
+                    // Trigger a build — will show error if template is gone from server
+                    this.$nextTick(() => this.triggerBuild(false));
+                }
             }
 
             // Initialize Three.js scene dynamically when DOM is ready
@@ -241,6 +249,14 @@ document.addEventListener('alpine:init', () => {
                 if (e.name === 'AbortError') return;
                 this.statusError = true;
                 this.statusMsg = 'Build failed: ' + e.message;
+                if (e.message.includes('Template not uploaded')) {
+                    this.activeCar = null;
+                    localStorage.removeItem('iRacingActiveCar');
+                    this.templateStatus = '';
+                    this.showToast('Template missing — please re-upload your car template.');
+                } else {
+                    this.showToast('Build error: ' + e.message);
+                }
             } finally {
                 if (isManual) this.isBuilding = false;
             }
@@ -330,6 +346,7 @@ document.addEventListener('alpine:init', () => {
                 const d = await r.json();
                 if (d.error) throw new Error(d.error);
                 this.activeCar = d.car_id;
+                localStorage.setItem('iRacingActiveCar', this.activeCar);
                 this.templateStatus = `✓ Template ready (${this.activeCar})`;
                 this.statusError = false;
                 this.markChanged();

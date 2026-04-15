@@ -22,16 +22,22 @@ from werkzeug.utils import secure_filename
 
 from pipeline.template_fetcher import fetch_single
 
-app = Flask(__name__, template_folder="flask_templates")
+# Resolve all paths relative to this file so the app works regardless of
+# which directory it is launched from (double-click, VSCode, terminal, etc.)
+_HERE = Path(__file__).parent.resolve()
+
+app = Flask(__name__,
+            template_folder=str(_HERE / "flask_templates"),
+            static_folder=str(_HERE / "static"))
 app.config["MAX_CONTENT_LENGTH"] = 64 * 1024 * 1024  # 64 MB upload limit
 
-CARS_JSON     = Path("cars.json")
+CARS_JSON     = _HERE / "cars.json"
 # TEMPLATES_DIR / LOGOS_DIR are env-var configurable so a Railway Persistent
 # Volume (mounted at e.g. /data) survives redeploys.
 # In Railway: set TEMPLATES_DIR=/data/car_templates and LOGOS_DIR=/data/logos
-TEMPLATES_DIR = Path(os.environ.get("TEMPLATES_DIR", "car_templates"))
-LOGOS_DIR     = Path(os.environ.get("LOGOS_DIR",     "static/logos"))
-PREVIEWS_DIR  = Path("static/previews")
+TEMPLATES_DIR = Path(os.environ.get("TEMPLATES_DIR", str(_HERE / "car_templates")))
+LOGOS_DIR     = Path(os.environ.get("LOGOS_DIR",     str(_HERE / "static" / "logos")))
+PREVIEWS_DIR  = _HERE / "static" / "previews"
 
 # Create runtime dirs
 TEMPLATES_DIR.mkdir(parents=True, exist_ok=True)

@@ -400,7 +400,9 @@ def _draw_gradient(img, c1, c2, direction="horizontal", angle_deg=45, size=DEFAU
         for i in range(S):
             d.line([(0, i), (S, i)] if direction == "vertical" else [(i, 0), (i, S)],
                    fill=int(255 * i / S))
+        layer_c1 = Image.new("RGBA", (S, S), tuple(list(c1) + [255]))
         layer_c2 = Image.new("RGBA", (S, S), tuple(list(c2) + [255]))
+        img.paste(layer_c1, (0, 0))
         img.paste(layer_c2, (0, 0), mask=grad)
 
 def _draw_radial_gradient(img, c1, c2, cx_f=0.5, cy_f=0.5, size=DEFAULT_SIZE):
@@ -410,8 +412,10 @@ def _draw_radial_gradient(img, c1, c2, cx_f=0.5, cy_f=0.5, size=DEFAULT_SIZE):
     dist = np.sqrt((x - cx_f*S)**2 + (y - cy_f*S)**2)
     mask_arr = (dist / (S * 0.7) * 255).clip(0, 255).astype(np.uint8)
     mask = Image.fromarray(mask_arr)
-    
+
+    layer_c1 = Image.new("RGBA", (S, S), tuple(list(c1) + [255]))
     layer_c2 = Image.new("RGBA", (S, S), tuple(list(c2) + [255]))
+    img.paste(layer_c1, (0, 0))
     img.paste(layer_c2, (0, 0), mask=mask)
 
 def _draw_chevron(draw, secondary, accent, depth, h_off, v_off, size=DEFAULT_SIZE):
